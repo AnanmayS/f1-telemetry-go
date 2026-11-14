@@ -10,7 +10,8 @@ import (
 	"github.com/AnanmayS/f1-telemetry-go/internal/store"
 )
 
-// BenchmarkCompareWarm measures one warm /api/compare request end to end
+// BenchmarkCompareWarm measures one /api/compare request with both laps in the
+// lap cache but the response cache off, end to end
 // (resample, JSON, gzip) on real data. It skips when the golden session is
 // not ingested. Run: go test ./internal/api -bench Compare -run xxx
 func BenchmarkCompareWarm(b *testing.B) {
@@ -26,7 +27,7 @@ func BenchmarkCompareWarm(b *testing.B) {
 	if _, err := st.Acquire(9492); err != nil {
 		b.Skip("session 9492 not ingested")
 	}
-	s := New(Options{Store: st, Log: quiet})
+	s := New(Options{Store: st, Log: quiet, RespCacheBytes: -1}) // measure the uncached path
 	req := httptest.NewRequest(http.MethodGet, "/api/compare?a=9492:1:fastest&b=9492:4:fastest", nil)
 	req.Header.Set("Accept-Encoding", "gzip")
 	b.ReportAllocs()
