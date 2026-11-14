@@ -11,7 +11,6 @@ package vercelapp
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,8 +21,6 @@ import (
 	"github.com/AnanmayS/f1-telemetry-go/internal/api"
 	"github.com/AnanmayS/f1-telemetry-go/internal/store"
 )
-
-var debugListing string
 
 var (
 	once sync.Once
@@ -57,7 +54,7 @@ func setup() {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]string{"error": "data is not available", "code": "unavailable", "debug": debugListing})
+			json.NewEncoder(w).Encode(map[string]string{"error": "data is not available", "code": "unavailable"})
 		})
 		return
 	}
@@ -102,6 +99,5 @@ func findData(log *slog.Logger) string {
 		}
 	}
 	log.Error("data bundle not found", "cwd", cwd, "exe", exe, "tried", candidates, "listing", seen)
-	debugListing = fmt.Sprint("cwd=", cwd, " exe=", exe, " listing=", seen) // TEMPORARY: remove once the layout is known
 	return ""
 }
