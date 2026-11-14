@@ -4,11 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ghostlap: compare two F1 laps</title>
-    <meta name="description" content="Overlay two laps and see where the time was won and lost: delta, speed, throttle, brake, gear, RPM and DRS by distance." />
+    <meta name="description" content="See where on the track one lap gained or lost time to another, section by section, with speed, throttle, brake, gear, RPM and DRS." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="ghostlap" />
     <meta property="og:title" content="ghostlap: compare two F1 laps" />
-    <meta property="og:description" content="Overlay two laps and see where the time was won and lost: delta, speed, throttle, brake, gear, RPM and DRS by distance." />
+    <meta property="og:description" content="See where on the track one lap gained or lost time to another, section by section, with speed, throttle, brake, gear, RPM and DRS." />
     <meta name="twitter:card" content="summary" />
     <meta name="color-scheme" content="dark light" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23101214'/%3E%3Cpath d='M4 22c5-12 9-12 12-6s7 6 12-6' fill='none' stroke='%235aa9ff' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M4 16c5-8 9-8 12-2s7 4 12-2' fill='none' stroke='%23ff8000' stroke-width='3' stroke-linecap='round' stroke-dasharray='4 4'/%3E%3C/svg%3E" />
@@ -16,22 +16,41 @@
   <body>
     <header class="top">
       <h1>ghostlap</h1>
-      <p class="tag">Compare two laps by distance</p>
+      <p class="tag">Where on the track one lap beats another</p>
     </header>
 
     <main id="app">
+      <section id="summary" class="summary" aria-label="Laps being compared" hidden></section>
       <form id="picker" class="picker" aria-label="Lap selection" hidden></form>
-
-      <section id="summary" class="summary" aria-live="polite" hidden></section>
 
       <p id="status" class="status" role="status">Loading sessions…</p>
 
       <div id="compare" class="compare" hidden>
-        <aside class="side" aria-label="Values at cursor">
-          <canvas id="map" class="map" role="img" aria-label="Track outline of lap A with the cursor position"></canvas>
-          <dl id="readout" class="readout"></dl>
-        </aside>
-        <div id="charts" class="charts"></div>
+        <section class="overview" aria-label="Track overview">
+          <div class="mapwrap">
+            <svg id="map" class="map" role="img" aria-label="Track map"></svg>
+            <p id="legend" class="legend"></p>
+          </div>
+          <div class="secpanel">
+            <div class="sechead">
+              <div class="seg" role="group" aria-label="Split the lap by">
+                <button type="button" id="mode-corners" aria-pressed="true">Corners</button>
+                <button type="button" id="mode-sectors" aria-pressed="false">Sectors</button>
+              </div>
+              <button type="button" id="sort" class="quiet" aria-pressed="false">Biggest gaps first</button>
+            </div>
+            <p id="mode-note" class="hint" hidden></p>
+            <div id="barhead" class="barhead" aria-hidden="true"></div>
+            <div id="sections" class="rows" role="listbox" aria-label="Track sections"></div>
+          </div>
+        </section>
+
+        <section id="detail" class="detail" aria-label="Selected section"></section>
+
+        <section class="trace" aria-label="Telemetry">
+          <dl id="readout" class="readout" aria-label="Values at the cursor"></dl>
+          <div id="charts" class="charts"></div>
+        </section>
       </div>
     </main>
 

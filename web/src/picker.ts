@@ -169,6 +169,8 @@ export interface Picker {
   /** Restores a selection (from the URL) or picks defaults: the two fastest drivers of the newest qualifying. */
   init(a: LapRef | null, b: LapRef | null): Promise<void>;
   selection(): Selection | null;
+  /** Moves the keyboard focus to the first field. */
+  focus(): void;
 }
 
 export function createPicker(
@@ -210,6 +212,7 @@ export function createPicker(
 
   return {
     selection,
+    focus: () => form.querySelector('select')?.focus(),
     async init(ra, rb) {
       // A link to a session we do not have falls back to the defaults as a
       // whole: keeping its driver and lap would show some other comparison.
@@ -218,7 +221,6 @@ export function createPicker(
       const start = sessions.find((s) => s.session_type === 'Qualifying') ?? sessions[0]!;
       await a.load(wa ?? { session: start.session_key });
       await b.load(known(rb) ?? { session: a.sessionKey! });
-      form.hidden = false;
       onChange(selection());
     },
   };
