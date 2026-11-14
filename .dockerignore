@@ -1,0 +1,9 @@
+.git
+data
+bin
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+web/screenshots
+bench/load/out

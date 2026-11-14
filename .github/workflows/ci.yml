@@ -1,0 +1,57 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+      - name: tests (race)
+        run: go test -race ./...
+      - name: fuzz smoke
+        run: |
+          for t in FuzzDecodeDelta FuzzDecodeDoD FuzzDecodeRLE FuzzDecodeBoolRLE FuzzDecodeBlock; do
+            go test ./internal/encoding -run '^$' -fuzz "^$t\$" -fuzztime 10s
+          done
+          go test ./internal/segment -run '^$' -fuzz '^FuzzParse$' -fuzztime 10s
+          go test ./internal/wal -run '^$' -fuzz '^FuzzReplay$' -fuzztime 10s
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: bundle budget (150 KB gzipped)
+        run: |
+          size=$(cat dist/assets/*.js | gzip -c | wc -c)
+          echo "initial JS: $size bytes gzipped"
+          test "$size" -le 153600
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ghostlap .

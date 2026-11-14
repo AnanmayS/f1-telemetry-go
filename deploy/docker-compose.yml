@@ -1,0 +1,23 @@
+# One small VPS: the server on localhost:8080 and a Cloudflare Tunnel in
+# front of it for HTTPS and caching. Put the tunnel token in deploy/.env
+# (TUNNEL_TOKEN=...), which is gitignored.
+services:
+  ghostlap:
+    build: ..
+    restart: unless-stopped
+    volumes:
+      - ../data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 1g
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on: [ghostlap]

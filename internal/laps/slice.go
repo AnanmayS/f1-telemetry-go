@@ -14,9 +14,6 @@ import (
 // Missing marks an absent throttle or brake reading in a Car row.
 const Missing = -1
 
-// sentinel is the feed's "no data" value for throttle and brake.
-const sentinel = 104
-
 // Car is one car_data row; T is ms since the session epoch.
 type Car struct {
 	T                                      int64
@@ -47,7 +44,8 @@ const (
 )
 
 // CleanCar sorts rows by time, drops duplicate timestamps (keeping the first
-// row seen) and maps feed sentinels to Missing / boolean brake.
+// row seen) and normalises throttle and brake: anything outside 0..100 (the
+// feed's "no data" sentinel is 104) becomes Missing, and brake becomes 0/1.
 func CleanCar(rows []Car) []Car {
 	out := slices.Clone(rows)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].T < out[j].T })
