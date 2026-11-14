@@ -19,6 +19,9 @@ import (
 const (
 	cacheData = "public, max-age=604800, stale-while-revalidate=86400"
 	cacheList = "public, max-age=300"
+	// cacheLive is for sessions still being ingested: their laps change every
+	// second or so, so clients must come back.
+	cacheLive = "public, max-age=2"
 	cacheNone = "no-store"
 )
 
@@ -214,4 +217,14 @@ func (s *Server) writeAndCache(w http.ResponseWriter, r *http.Request, tag strin
 	gzipPool.Put(zw)
 	s.responses.Put(tag, buf.Bytes(), int64(buf.Len()))
 	writeGzipped(w, buf.Bytes())
+}
+
+// cacheFor picks the cache lifetime for data from the given segment builds.
+func cacheFor(gens ...string) string {
+	for _, g := range gens {
+		if strings.HasPrefix(g, "live-") {
+			return cacheLive
+		}
+	}
+	return cacheData
 }

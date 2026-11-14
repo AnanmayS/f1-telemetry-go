@@ -199,7 +199,7 @@ type sessionJSON struct {
 }
 
 func (s *Server) handleSeasons(w http.ResponseWriter, r *http.Request) *apiError {
-	if notModified(w, r, etag("seasons", fmt.Sprint(s.store.Version())), cacheList) {
+	if notModified(w, r, etag("seasons", fmt.Sprint(s.store.Rev())), cacheList) {
 		return nil
 	}
 	years := s.store.Years()
@@ -219,7 +219,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) *apiErro
 		}
 		year = y
 	}
-	if notModified(w, r, etag("sessions", fmt.Sprint(s.store.Version()), fmt.Sprint(year)), cacheList) {
+	if notModified(w, r, etag("sessions", fmt.Sprint(s.store.Rev()), fmt.Sprint(year)), cacheList) {
 		return nil
 	}
 	list := s.store.Sessions(year)
@@ -248,7 +248,7 @@ func (s *Server) handleDrivers(w http.ResponseWriter, r *http.Request) *apiError
 		return storeError(err)
 	}
 	defer sess.Release()
-	if notModified(w, r, etag("drivers", sess.Gen), cacheData) {
+	if notModified(w, r, etag("drivers", sess.Gen), cacheFor(sess.Gen)) {
 		return nil
 	}
 	out := make([]driverJSON, 0, len(sess.Meta.Drivers))
@@ -314,7 +314,7 @@ func (s *Server) handleLaps(w http.ResponseWriter, r *http.Request) *apiError {
 	if len(rows) == 0 {
 		return notFound("driver has no laps in this session")
 	}
-	if notModified(w, r, etag("laps", sess.Gen, fmt.Sprint(driver)), cacheData) {
+	if notModified(w, r, etag("laps", sess.Gen, fmt.Sprint(driver)), cacheFor(sess.Gen)) {
 		return nil
 	}
 	fastest := -1
@@ -399,7 +399,7 @@ func (s *Server) handleLap(w http.ResponseWriter, r *http.Request) *apiError {
 		return aerr
 	}
 	tag := etag("lap", sess.Gen, fmt.Sprint(driver, row.Number), chKey)
-	if notModified(w, r, tag, cacheData) || s.serveCached(w, r, tag) {
+	if notModified(w, r, tag, cacheFor(sess.Gen)) || s.serveCached(w, r, tag) {
 		return nil
 	}
 	ld, err := s.store.Lap(sess, driver, row.Number)
@@ -538,7 +538,7 @@ func (s *Server) handleCompare(w http.ResponseWriter, r *http.Request) *apiError
 	defer b.sess.Release()
 
 	tag := etag("compare", a.sess.Gen, fmt.Sprint(refA.driver, a.row.Number), b.sess.Gen, fmt.Sprint(refB.driver, b.row.Number), chKey, strconv.FormatFloat(step, 'g', -1, 64))
-	if notModified(w, r, tag, cacheData) || s.serveCached(w, r, tag) {
+	if notModified(w, r, tag, cacheFor(a.sess.Gen, b.sess.Gen)) || s.serveCached(w, r, tag) {
 		return nil
 	}
 	var err error

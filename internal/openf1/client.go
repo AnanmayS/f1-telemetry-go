@@ -303,3 +303,9 @@ func writeGzip(path string, body []byte) error {
 	}
 	return err
 }
+
+// WriteCache stores body as the cache entry for cachePath, as if it had been
+// fetched. It exists for tools and tests that seed a raw cache.
+func (c *Client) WriteCache(cachePath string, body []byte) error {
+	return writeGzip(filepath.Join(c.CacheDir, cachePath), body)
+}

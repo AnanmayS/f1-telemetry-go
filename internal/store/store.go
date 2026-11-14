@@ -33,7 +33,11 @@ type Store struct {
 	log *slog.Logger
 
 	snap     atomic.Pointer[snapshot]
-	reloadMu sync.Mutex // serialises Reload; never taken by readers
+	reloadMu sync.Mutex // serialises snapshot changes; never taken by readers
+	// live holds in-memory segments of sessions still being ingested. They are
+	// served like any other segment until the session is sealed into the manifest.
+	live map[int]*openSegment
+	rev  int64 // bumped on every published snapshot
 
 	cache  *lru.Cache[lapKey, *model.LapData]
 	flight flight
@@ -42,7 +46,8 @@ type Store struct {
 }
 
 type snapshot struct {
-	version  int64
+	version  int64 // manifest version
+	rev      int64 // changes whenever the set of served segments changes
 	segs     map[int]*openSegment
 	sessions []model.Session // newest first
 	years    []int           // newest first
@@ -120,6 +125,21 @@ func (s *Store) Reload() (bool, error) {
 		}
 		next.segs[e.SessionKey] = &openSegment{entry: e, seg: seg}
 	}
+	for key, o := range s.live {
+		if _, sealed := next.segs[key]; sealed {
+			delete(s.live, key) // sealed: the file replaces the in-memory segment (released below)
+		} else {
+			next.segs[key] = o
+		}
+	}
+	s.publish(next, old)
+	s.log.Info("manifest loaded", "version", man.Version, "segments", len(next.segs))
+	return true, nil
+}
+
+// publish finishes next (listings, revision), swaps it in and releases the
+// segments of old that it no longer serves. Callers hold reloadMu.
+func (s *Store) publish(next, old *snapshot) {
 	seenYear := map[int]bool{}
 	for _, os := range next.segs {
 		sess := os.seg.Meta.Session
@@ -131,15 +151,64 @@ func (s *Store) Reload() (bool, error) {
 	}
 	sort.Slice(next.sessions, func(i, j int) bool { return next.sessions[i].Start.After(next.sessions[j].Start) })
 	sort.Sort(sort.Reverse(sort.IntSlice(next.years)))
+	s.rev++
+	next.rev = s.rev
 	s.snap.Store(next)
 	for key, o := range old.segs {
 		if next.segs[key] != o {
 			o.seg.Release()
 		}
 	}
-	s.log.Info("manifest loaded", "version", man.Version, "segments", len(next.segs))
-	return true, nil
 }
+
+// SetLive serves seg (an in-memory segment of a session being ingested)
+// under its session key, replacing any earlier live segment for it. gen must
+// differ for every call; it keys the caches. A session already sealed into
+// the manifest is not overridden. The store takes ownership of seg.
+func (s *Store) SetLive(seg *segment.Segment, gen string) {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+	old := s.snap.Load()
+	if cur, ok := old.segs[seg.SessionKey]; ok && s.live[seg.SessionKey] != cur {
+		seg.Release() // sealed already
+		return
+	}
+	if s.live == nil {
+		s.live = map[int]*openSegment{}
+	}
+	o := &openSegment{entry: Entry{SessionKey: seg.SessionKey, Year: seg.Meta.Session.Year, SHA256: gen}, seg: seg}
+	s.live[seg.SessionKey] = o
+	next := &snapshot{version: old.version, segs: make(map[int]*openSegment, len(old.segs)+1)}
+	for k, v := range old.segs {
+		next.segs[k] = v
+	}
+	next.segs[seg.SessionKey] = o
+	s.publish(next, old)
+}
+
+// ClearLive stops serving a live segment (after its session was sealed and
+// reloaded, or abandoned).
+func (s *Store) ClearLive(key int) {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+	o, ok := s.live[key]
+	if !ok {
+		return
+	}
+	delete(s.live, key)
+	old := s.snap.Load()
+	next := &snapshot{version: old.version, segs: make(map[int]*openSegment, len(old.segs))}
+	for k, v := range old.segs {
+		if v != o {
+			next.segs[k] = v
+		}
+	}
+	s.publish(next, old)
+}
+
+// Rev changes whenever the set of served segments changes (manifest reload
+// or live update). Listings use it as their cache validator.
+func (s *Store) Rev() int64 { return s.snap.Load().rev }
 
 // Watch reloads the manifest every interval until ctx is done.
 func (s *Store) Watch(ctx context.Context, interval time.Duration) {
@@ -165,6 +234,7 @@ func (s *Store) Close() {
 	for _, o := range old.segs {
 		o.seg.Release()
 	}
+	s.live = nil
 }
 
 func (s *Store) Version() int64 { return s.snap.Load().version }

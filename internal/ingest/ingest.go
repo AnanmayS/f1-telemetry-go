@@ -144,25 +144,34 @@ func (in *Ingester) Session(ctx context.Context, s model.Session) (Result, error
 	return res, nil
 }
 
-// Build fetches a session and returns its serialised segment.
-func (in *Ingester) Build(ctx context.Context, s model.Session) (data []byte, meta segment.Meta, nLaps int, err error) {
-	meta.Session = s
+// Raw is one session's cleaned input: everything a segment is built from.
+type Raw struct {
+	Meta   segment.Meta // Session, Drivers, RawJSONBytes, RawSamples filled in
+	Timing map[int][]laps.Timing
+	Car    map[int][]laps.Car // cleaned (sorted, de-duplicated)
+	Loc    map[int][]laps.Loc
+}
+
+// Fetch downloads (or reads from the raw cache) everything for one session.
+// Drivers without laps are listed in Meta.Drivers but have no telemetry.
+func (in *Ingester) Fetch(ctx context.Context, s model.Session) (*Raw, error) {
+	raw := &Raw{Timing: map[int][]laps.Timing{}, Car: map[int][]laps.Car{}, Loc: map[int][]laps.Loc{}}
+	raw.Meta.Session = s
 	drivers, n, err := in.Client.Drivers(ctx, s.Key)
 	if err != nil {
-		return nil, meta, 0, err
+		return nil, err
 	}
-	meta.RawJSONBytes += int64(n)
+	raw.Meta.RawJSONBytes += int64(n)
 	if len(drivers) == 0 {
-		return nil, meta, 0, nil
+		return raw, nil
 	}
 	rawLaps, n, err := in.Client.Laps(ctx, s.Key)
 	if err != nil {
-		return nil, meta, 0, err
+		return nil, err
 	}
-	meta.RawJSONBytes += int64(n)
-	timing := map[int][]laps.Timing{}
+	raw.Meta.RawJSONBytes += int64(n)
 	for _, l := range rawLaps {
-		timing[l.DriverNumber] = append(timing[l.DriverNumber], convertLap(s.Start, l))
+		raw.Timing[l.DriverNumber] = append(raw.Timing[l.DriverNumber], convertLap(s.Start, l))
 	}
 
 	seen := map[int]bool{}
@@ -178,19 +187,16 @@ func (in *Ingester) Build(ctx context.Context, s model.Session) (data []byte, me
 		if d.TeamColour != nil {
 			md.Colour = *d.TeamColour
 		}
-		meta.Drivers = append(meta.Drivers, md)
+		raw.Meta.Drivers = append(raw.Meta.Drivers, md)
 	}
-	sort.Slice(meta.Drivers, func(i, j int) bool { return meta.Drivers[i].Number < meta.Drivers[j].Number })
+	sort.Slice(raw.Meta.Drivers, func(i, j int) bool { return raw.Meta.Drivers[i].Number < raw.Meta.Drivers[j].Number })
 
-	var (
-		mu    sync.Mutex
-		built []*laps.Built
-	)
+	var mu sync.Mutex
 	window := openf1.SessionWindow(s.Start, s.End)
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(max(in.Workers, 1))
-	for _, d := range meta.Drivers {
-		if len(timing[d.Number]) == 0 {
+	for _, d := range raw.Meta.Drivers {
+		if len(raw.Timing[d.Number]) == 0 {
 			continue // no laps, so nothing to slice; do not spend requests on it
 		}
 		g.Go(func() error {
@@ -202,19 +208,35 @@ func (in *Ingester) Build(ctx context.Context, s model.Session) (data []byte, me
 			if err != nil {
 				return fmt.Errorf("driver %d location: %w", d.Number, err)
 			}
-			b := laps.Slice(d.Number, timing[d.Number], laps.CleanCar(convertCar(s.Start, car)), laps.CleanLoc(convertLoc(s.Start, loc)))
+			cleanCar, cleanLoc := laps.CleanCar(convertCar(s.Start, car)), laps.CleanLoc(convertLoc(s.Start, loc))
 			mu.Lock()
-			built = append(built, b...)
-			meta.RawJSONBytes += int64(nCar + nLoc)
-			meta.RawSamples += int64(len(car))
+			raw.Car[d.Number], raw.Loc[d.Number] = cleanCar, cleanLoc
+			raw.Meta.RawJSONBytes += int64(nCar + nLoc)
+			raw.Meta.RawSamples += int64(len(car))
 			mu.Unlock()
 			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {
-		return nil, meta, 0, err
+		return nil, err
+	}
+	return raw, nil
+}
+
+// BuildSegment slices every driver's laps, normalises distance and
+// serialises the session. It returns nil data when there is no telemetry.
+// The live path uses the same function, so a sealed live session and a
+// batch-ingested one are built identically.
+func BuildSegment(meta segment.Meta, timing map[int][]laps.Timing, car map[int][]laps.Car, loc map[int][]laps.Loc) (data []byte, out segment.Meta, nLaps int, err error) {
+	var built []*laps.Built
+	for _, d := range meta.Drivers {
+		if len(timing[d.Number]) == 0 {
+			continue
+		}
+		built = append(built, laps.Slice(d.Number, timing[d.Number], car[d.Number], loc[d.Number])...)
 	}
 	meta.CircuitLengthM = math.Round(laps.Finalize(built)*100) / 100
+	meta.Samples = 0
 	lapData := make([]*model.LapData, len(built))
 	for i, b := range built {
 		lapData[i] = b.Data
@@ -225,6 +247,15 @@ func (in *Ingester) Build(ctx context.Context, s model.Session) (data []byte, me
 	}
 	data, err = segment.Build(meta, lapData)
 	return data, meta, len(built), err
+}
+
+// Build fetches a session and returns its serialised segment.
+func (in *Ingester) Build(ctx context.Context, s model.Session) (data []byte, meta segment.Meta, nLaps int, err error) {
+	raw, err := in.Fetch(ctx, s)
+	if err != nil {
+		return nil, segment.Meta{Session: s}, 0, err
+	}
+	return BuildSegment(raw.Meta, raw.Timing, raw.Car, raw.Loc)
 }
 
 func ms(epoch, t time.Time) int64 { return t.Sub(epoch).Milliseconds() }

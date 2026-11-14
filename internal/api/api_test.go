@@ -655,3 +655,54 @@ func TestResponseCache(t *testing.T) {
 		t.Fatal("disabled cache")
 	}
 }
+
+// A session still being ingested is served from an in-memory segment with a
+// short cache lifetime, and every update changes the validators.
+func TestLiveSessionCaching(t *testing.T) {
+	s, st, _ := fixture(t, Options{})
+	build := func(durMs int32) *segment.Segment {
+		meta := segment.Meta{Session: model.Session{Key: 900, Year: 2026, Circuit: "Suzuka", Name: "Race", Start: time.Date(2026, 3, 29, 5, 0, 0, 0, time.UTC)},
+			Drivers: []model.Driver{{Number: 1, Acronym: "VER"}, {Number: 4, Acronym: "NOR"}}, CircuitLengthM: 5000}
+		data, err := segment.Build(meta, []*model.LapData{lap(1, 1, 10_000, 90_000, 5000, true), lap(4, 1, 10_000, durMs, 5000, true)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		seg, err := segment.Parse(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return seg
+	}
+	listTag := get(t, s, "/api/sessions").header.Get("ETag")
+	st.SetLive(build(91_000), "live-900-1")
+	list := get(t, s, "/api/sessions?year=2026")
+	if !strings.Contains(string(list.body), `"session_key":900`) || get(t, s, "/api/sessions").header.Get("ETag") == listTag {
+		t.Fatalf("live session not listed, or listing validator unchanged: %s", list.body)
+	}
+	url := "/api/compare?a=900:1:fastest&b=900:4:fastest"
+	first := get(t, s, url, "Accept-Encoding", "gzip")
+	if first.code != 200 || first.header.Get("Cache-Control") != cacheLive {
+		t.Fatalf("live compare: %d cache=%q", first.code, first.header.Get("Cache-Control"))
+	}
+	if cc := get(t, s, "/api/sessions/900/laps?driver=1").header.Get("Cache-Control"); cc != cacheLive {
+		t.Errorf("live lap list cache-control = %q", cc)
+	}
+	st.SetLive(build(92_500), "live-900-2") // the feed moved on
+	second := get(t, s, url, "If-None-Match", first.header.Get("ETag"))
+	if second.code != 200 {
+		t.Fatalf("stale validator accepted after a live update: %d", second.code)
+	}
+	if c := decode[compareResp](t, second); *c.FinalDelta != 2.5 {
+		t.Fatalf("served the previous live snapshot: final delta %v", *c.FinalDelta)
+	}
+	if cc := get(t, s, "/api/compare?a=100:1:3&b=900:4:1").header.Get("Cache-Control"); cc != cacheLive {
+		t.Errorf("a comparison involving a live lap must use the short lifetime, got %q", cc)
+	}
+	st.ClearLive(900)
+	if r := get(t, s, url); r.code != 404 {
+		t.Fatalf("cleared live session still served: %d", r.code)
+	}
+	if r := get(t, s, "/api/compare?a=100:1:3&b=100:4:1"); r.code != 200 || r.header.Get("Cache-Control") != cacheData {
+		t.Fatalf("sealed sessions affected: %d %q", r.code, r.header.Get("Cache-Control"))
+	}
+}
