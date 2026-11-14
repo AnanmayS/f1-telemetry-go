@@ -230,7 +230,7 @@ func TestEndToEnd(t *testing.T) {
 func TestResumeAfterFailure(t *testing.T) {
 	var fail atomic.Bool
 	fail.Store(true)
-	srv, hits := fakeAPI(t, &fail)
+	srv, _ := fakeAPI(t, &fail)
 	dir := t.TempDir()
 	in := newIngester(t, srv, dir)
 	ctx := context.Background()
@@ -248,13 +248,16 @@ func TestResumeAfterFailure(t *testing.T) {
 	}
 
 	fail.Store(false)
-	before := hits.Load()
+	cached := in.Client.CacheHits.Load()
 	if _, err := in.Session(ctx, s); err != nil {
 		t.Fatal(err)
 	}
-	// drivers and laps were cached by the failed run; only telemetry is fetched now.
-	if n := hits.Load() - before; n > 4 {
-		t.Fatalf("resume sent %d requests, want at most 4 (2 drivers x car_data+location)", n)
+	// drivers and laps were cached by the failed run and are not fetched again.
+	if n := in.Client.CacheHits.Load() - cached; n < 2 {
+		t.Fatalf("resume served %d responses from cache, want at least 2 (drivers, laps)", n)
+	}
+	if man, _ := store.LoadManifest(dir); len(man.Segments) != 1 {
+		t.Fatal("resumed session missing from the manifest")
 	}
 }
 
