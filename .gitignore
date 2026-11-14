@@ -1,0 +1,9 @@
+/data/
+/bin/
+node_modules/
+web/dist/
+*.test
+*.prof
+.DS_Store
+test-results/
+playwright-report/
