@@ -531,7 +531,7 @@ func TestStaticAndVisitCounting(t *testing.T) {
 		t.Fatalf("unknown path should serve the app: %d", r.code)
 	}
 	s.visits = newVisitCounter() // discard the probe above
-	s.metrics = newMetrics(s.store, s.visits)
+	s.metrics = newMetrics(s.store, s.visits, s)
 	s.mux = http.NewServeMux()
 	s.mux.HandleFunc("/", s.handleStatic)
 	metricsOf := func() string {
@@ -620,5 +620,38 @@ func TestNumberFormatting(t *testing.T) {
 	}
 	if got := string(appendInts(nil, []int64{-800, 1418}, nil, 0, 100, 2)); got != "[-8,14.18]" {
 		t.Errorf("scaled ints: %s", got)
+	}
+}
+
+func TestResponseCache(t *testing.T) {
+	s, st, _ := fixture(t, Options{})
+	url := "/api/compare?a=100:1:fastest&b=100:4:fastest"
+	first := get(t, s, url, "Accept-Encoding", "gzip")
+	lookups := st.Stats().CacheHits + st.Stats().CacheMisses
+	second := get(t, s, "/api/compare?a=100:1:3&b=100:4:1", "Accept-Encoding", "gzip") // same resource, other spelling
+	if second.code != 200 || string(second.body) != string(first.body) || second.header.Get("Content-Encoding") != "gzip" ||
+		second.header.Get("ETag") != first.header.Get("ETag") || second.header.Get("Cache-Control") != first.header.Get("Cache-Control") {
+		t.Fatalf("cached response differs: %d %v", second.code, second.header)
+	}
+	if got := st.Stats().CacheHits + st.Stats().CacheMisses; got != lookups {
+		t.Fatal("a cached response still touched the lap store")
+	}
+	if s.respHits.Load() != 1 || s.respMisses.Load() != 1 || s.responses.Len() != 1 {
+		t.Fatalf("hits=%d misses=%d entries=%d", s.respHits.Load(), s.respMisses.Load(), s.responses.Len())
+	}
+	// Clients without gzip are served uncompressed and bypass the cache.
+	plain := get(t, s, url)
+	if plain.header.Get("Content-Encoding") != "" || !json.Valid(plain.body) {
+		t.Fatal("plain client got a compressed or invalid body")
+	}
+	// Errors are never cached.
+	get(t, s, "/api/compare?a=100:1:3&b=100:1:4", "Accept-Encoding", "gzip")
+	if s.responses.Len() != 1 {
+		t.Fatal("an error response was cached")
+	}
+	off, _, _ := fixture(t, Options{RespCacheBytes: -1})
+	get(t, off, url, "Accept-Encoding", "gzip")
+	if r := get(t, off, url, "Accept-Encoding", "gzip"); r.code != 200 || off.responses != nil {
+		t.Fatal("disabled cache")
 	}
 }

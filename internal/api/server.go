@@ -14,11 +14,13 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/AnanmayS/f1-telemetry-go/internal/laps"
+	"github.com/AnanmayS/f1-telemetry-go/internal/lru"
 	"github.com/AnanmayS/f1-telemetry-go/internal/model"
 	"github.com/AnanmayS/f1-telemetry-go/internal/segment"
 	"github.com/AnanmayS/f1-telemetry-go/internal/store"
@@ -32,6 +34,9 @@ type Options struct {
 	RateRPS    float64 // per-IP requests per second; 0 disables the limit
 	RateBurst  int
 	TrustProxy bool // take the client address from CF-Connecting-IP
+	// RespCacheBytes bounds the cache of finished, gzip-compressed lap and
+	// compare responses (0 = 64 MiB, negative = disabled).
+	RespCacheBytes int64
 }
 
 // Server implements http.Handler.
@@ -43,6 +48,11 @@ type Server struct {
 	static  string
 	metrics *metrics
 	visits  *visitCounter
+
+	// responses holds gzip bodies keyed by ETag. The ETag covers the segment
+	// build, so entries of a rebuilt session simply stop being asked for.
+	responses            *lru.Cache[string, []byte]
+	respHits, respMisses atomic.Int64
 }
 
 const (
@@ -64,7 +74,13 @@ func New(o Options) *Server {
 	} else {
 		s.limiter = &ipLimiter{trustProxy: o.TrustProxy}
 	}
-	s.metrics = newMetrics(o.Store, s.visits)
+	switch {
+	case o.RespCacheBytes == 0:
+		s.responses = lru.New[string, []byte](64 << 20)
+	case o.RespCacheBytes > 0:
+		s.responses = lru.New[string, []byte](o.RespCacheBytes)
+	}
+	s.metrics = newMetrics(o.Store, s.visits, s)
 
 	s.route("GET /api/seasons", "seasons", s.handleSeasons)
 	s.route("GET /api/sessions", "sessions", s.handleSessions)
@@ -382,7 +398,8 @@ func (s *Server) handleLap(w http.ResponseWriter, r *http.Request) *apiError {
 	if aerr != nil {
 		return aerr
 	}
-	if notModified(w, r, etag("lap", sess.Gen, fmt.Sprint(driver, row.Number), chKey), cacheData) {
+	tag := etag("lap", sess.Gen, fmt.Sprint(driver, row.Number), chKey)
+	if notModified(w, r, tag, cacheData) || s.serveCached(w, r, tag) {
 		return nil
 	}
 	ld, err := s.store.Lap(sess, driver, row.Number)
@@ -421,7 +438,7 @@ func (s *Server) handleLap(w http.ResponseWriter, r *http.Request) *apiError {
 		}
 	}
 	b = append(b, "}}"...)
-	writeJSON(w, r, b)
+	s.writeAndCache(w, r, tag, b)
 	return nil
 }
 
@@ -521,7 +538,7 @@ func (s *Server) handleCompare(w http.ResponseWriter, r *http.Request) *apiError
 	defer b.sess.Release()
 
 	tag := etag("compare", a.sess.Gen, fmt.Sprint(refA.driver, a.row.Number), b.sess.Gen, fmt.Sprint(refB.driver, b.row.Number), chKey, strconv.FormatFloat(step, 'g', -1, 64))
-	if notModified(w, r, tag, cacheData) {
+	if notModified(w, r, tag, cacheData) || s.serveCached(w, r, tag) {
 		return nil
 	}
 	var err error
@@ -598,7 +615,7 @@ func (s *Server) handleCompare(w http.ResponseWriter, r *http.Request) *apiError
 		out = append(out, '}')
 	}
 	out = append(out, "}}"...)
-	writeJSON(w, r, out)
+	s.writeAndCache(w, r, tag, out)
 	return nil
 }
 

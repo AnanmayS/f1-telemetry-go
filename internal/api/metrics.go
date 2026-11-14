@@ -20,7 +20,7 @@ type metrics struct {
 // latencyBuckets are fine-grained around the 50 ms p99 target.
 var latencyBuckets = []float64{.0005, .001, .002, .005, .01, .02, .03, .04, .05, .075, .1, .2, .5, 1, 2}
 
-func newMetrics(st *store.Store, v *visitCounter) *metrics {
+func newMetrics(st *store.Store, v *visitCounter, srv *Server) *metrics {
 	m := &metrics{
 		registry: prometheus.NewRegistry(),
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -53,6 +53,14 @@ func newMetrics(st *store.Store, v *visitCounter) *metrics {
 		gauge("ghostlap_lap_cache_bytes", "Bytes held by the decoded-lap cache.", stat(func(s store.Stats) int64 { return s.CacheBytes })),
 		gauge("ghostlap_segments", "Live segments (sessions) being served.", stat(func(s store.Stats) int64 { return int64(s.Segments) })),
 		gauge("ghostlap_manifest_version", "Version of the loaded manifest.", stat(func(s store.Stats) int64 { return s.ManifestVersion })),
+		counter("ghostlap_response_cache_hits_total", "Lap and compare responses served from the finished-response cache.", func() float64 { return float64(srv.respHits.Load()) }),
+		counter("ghostlap_response_cache_misses_total", "Lap and compare responses that had to be built.", func() float64 { return float64(srv.respMisses.Load()) }),
+		gauge("ghostlap_response_cache_bytes", "Bytes held by the finished-response cache.", func() float64 {
+			if srv.responses == nil {
+				return 0
+			}
+			return float64(srv.responses.Bytes())
+		}),
 		counter("ghostlap_page_views_total", "Page loads of the web app.", func() float64 { return float64(v.views.Load()) }),
 		counter("ghostlap_share_link_opens_total", "Page loads that arrived with a comparison in the URL.", func() float64 { return float64(v.shareOpens.Load()) }),
 		gauge("ghostlap_unique_visitors_today", "Distinct visitors since 00:00 UTC (salted hashes, never stored).", func() float64 { return float64(v.uniqueToday()) }),

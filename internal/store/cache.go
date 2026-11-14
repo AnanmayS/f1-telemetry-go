@@ -1,9 +1,7 @@
 package store
 
 import (
-	"container/list"
 	"sync"
-	"sync/atomic"
 
 	"github.com/AnanmayS/f1-telemetry-go/internal/model"
 )
@@ -15,78 +13,6 @@ type lapKey struct {
 	gen     string
 	driver  int
 	lap     int
-}
-
-const cacheShards = 16
-
-// lapCache is a byte-bounded LRU of decoded laps, split into shards so
-// readers of different laps do not contend on one lock.
-type lapCache struct {
-	shards [cacheShards]cacheShard
-	bytes  atomic.Int64
-}
-
-type cacheShard struct {
-	mu    sync.Mutex
-	limit int64
-	used  int64
-	ll    *list.List // front = most recently used
-	items map[lapKey]*list.Element
-}
-
-type cacheItem struct {
-	key  lapKey
-	data *model.LapData
-	size int64
-}
-
-func newLapCache(limitBytes int64) *lapCache {
-	c := &lapCache{}
-	for i := range c.shards {
-		c.shards[i] = cacheShard{limit: limitBytes / cacheShards, ll: list.New(), items: map[lapKey]*list.Element{}}
-	}
-	return c
-}
-
-func (c *lapCache) shard(k lapKey) *cacheShard {
-	h := uint32(k.session)*2654435761 ^ uint32(k.driver)*40503 ^ uint32(k.lap)*97
-	return &c.shards[h%cacheShards]
-}
-
-func (c *lapCache) get(k lapKey) (*model.LapData, bool) {
-	s := c.shard(k)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if e, ok := s.items[k]; ok {
-		s.ll.MoveToFront(e)
-		return e.Value.(*cacheItem).data, true
-	}
-	return nil, false
-}
-
-func (c *lapCache) put(k lapKey, d *model.LapData) {
-	size := int64(d.SizeBytes())
-	s := c.shard(k)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if size > s.limit {
-		return // larger than a whole shard: not worth evicting everything for
-	}
-	if e, ok := s.items[k]; ok {
-		s.ll.MoveToFront(e)
-		return
-	}
-	s.items[k] = s.ll.PushFront(&cacheItem{key: k, data: d, size: size})
-	s.used += size
-	c.bytes.Add(size)
-	for s.used > s.limit {
-		e := s.ll.Back()
-		it := e.Value.(*cacheItem)
-		s.ll.Remove(e)
-		delete(s.items, it.key)
-		s.used -= it.size
-		c.bytes.Add(-it.size)
-	}
 }
 
 // flight collapses concurrent loads of the same key into one.

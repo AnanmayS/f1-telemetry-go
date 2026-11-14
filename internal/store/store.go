@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/AnanmayS/f1-telemetry-go/internal/lru"
 	"github.com/AnanmayS/f1-telemetry-go/internal/model"
 	"github.com/AnanmayS/f1-telemetry-go/internal/segment"
 )
@@ -34,7 +35,7 @@ type Store struct {
 	snap     atomic.Pointer[snapshot]
 	reloadMu sync.Mutex // serialises Reload; never taken by readers
 
-	cache  *lapCache
+	cache  *lru.Cache[lapKey, *model.LapData]
 	flight flight
 
 	hits, misses, shared, decodes, decodeErrors atomic.Int64
@@ -73,7 +74,7 @@ func Open(dir string, cacheBytes int64, log *slog.Logger) (*Store, error) {
 	if log == nil {
 		log = slog.Default()
 	}
-	s := &Store{dir: dir, log: log, cache: newLapCache(cacheBytes)}
+	s := &Store{dir: dir, log: log, cache: lru.New[lapKey, *model.LapData](cacheBytes)}
 	s.snap.Store(&snapshot{segs: map[int]*openSegment{}})
 	if _, err := s.Reload(); err != nil {
 		return nil, err
@@ -224,13 +225,13 @@ func Fastest(seg *segment.Segment, driver int) (model.Lap, bool) {
 // for the same uncached lap decode it once. The result is shared: do not modify.
 func (s *Store) Lap(sess Session, driver, lap int) (*model.LapData, error) {
 	k := lapKey{session: sess.SessionKey, gen: sess.Gen, driver: driver, lap: lap}
-	if d, ok := s.cache.get(k); ok {
+	if d, ok := s.cache.Get(k); ok {
 		s.hits.Add(1)
 		return d, nil
 	}
 	s.misses.Add(1)
 	d, err, shared := s.flight.do(k, func() (*model.LapData, error) {
-		if d, ok := s.cache.get(k); ok { // filled while we waited for the flight slot
+		if d, ok := s.cache.Get(k); ok { // filled while we waited for the flight slot
 			return d, nil
 		}
 		row, ok := sess.Segment.Lap(driver, lap)
@@ -247,7 +248,7 @@ func (s *Store) Lap(sess Session, driver, lap int) (*model.LapData, error) {
 			s.log.Error("lap decode failed", "session", sess.SessionKey, "driver", driver, "lap", lap, "err", err)
 			return nil, err
 		}
-		s.cache.put(k, d)
+		s.cache.Put(k, d, int64(d.SizeBytes()))
 		return d, nil
 	})
 	if shared {
@@ -261,6 +262,6 @@ func (s *Store) Stats() Stats {
 	return Stats{
 		ManifestVersion: snap.version, Segments: len(snap.segs),
 		CacheHits: s.hits.Load(), CacheMisses: s.misses.Load(), SharedLoads: s.shared.Load(),
-		Decodes: s.decodes.Load(), DecodeErrors: s.decodeErrors.Load(), CacheBytes: s.cache.bytes.Load(),
+		Decodes: s.decodes.Load(), DecodeErrors: s.decodeErrors.Load(), CacheBytes: s.cache.Bytes(),
 	}
 }

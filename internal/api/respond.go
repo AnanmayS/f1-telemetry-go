@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -169,4 +170,48 @@ func appendObject(b []byte, v any) []byte {
 		return append(b, "null"...)
 	}
 	return append(b, j...)
+}
+
+func acceptsGzip(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+}
+
+func writeGzipped(w http.ResponseWriter, gz []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set("Content-Length", strconv.Itoa(len(gz)))
+	w.Write(gz)
+}
+
+// serveCached answers from the response cache and reports whether it did.
+// Cache headers must already be set.
+func (s *Server) serveCached(w http.ResponseWriter, r *http.Request, tag string) bool {
+	if s.responses == nil || !acceptsGzip(r) {
+		return false
+	}
+	gz, ok := s.responses.Get(tag)
+	if !ok {
+		s.respMisses.Add(1)
+		return false
+	}
+	s.respHits.Add(1)
+	writeGzipped(w, gz)
+	return true
+}
+
+// writeAndCache sends body and keeps its gzip form for the next request.
+func (s *Server) writeAndCache(w http.ResponseWriter, r *http.Request, tag string, body []byte) {
+	if s.responses == nil || !acceptsGzip(r) || len(body) < 512 {
+		writeJSON(w, r, body)
+		return
+	}
+	var buf bytes.Buffer
+	buf.Grow(len(body) / 3)
+	zw := gzipPool.Get().(*gzip.Writer)
+	zw.Reset(&buf)
+	zw.Write(body)
+	zw.Close()
+	gzipPool.Put(zw)
+	s.responses.Put(tag, buf.Bytes(), int64(buf.Len()))
+	writeGzipped(w, buf.Bytes())
 }

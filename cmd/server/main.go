@@ -22,6 +22,7 @@ func main() {
 		dataDir    = flag.String("data", "data", "data directory (segments, MANIFEST)")
 		static     = flag.String("static", "web/dist", "built frontend directory (empty to disable)")
 		cacheMB    = flag.Int64("cache-mb", 256, "decoded-lap cache size in MiB")
+		respMB     = flag.Int64("resp-cache-mb", 64, "finished-response cache size in MiB (0 disables)")
 		reload     = flag.Duration("reload", 30*time.Second, "how often to check the manifest for new segments")
 		rateRPS    = flag.Float64("rate", 20, "per-IP API requests per second (0 disables the limit)")
 		rateBurst  = flag.Int("burst", 120, "per-IP burst")
@@ -48,7 +49,11 @@ func main() {
 	defer stop()
 	go st.Watch(ctx, *reload)
 
-	app := api.New(api.Options{Store: st, Log: log, StaticDir: *static, RateRPS: *rateRPS, RateBurst: *rateBurst, TrustProxy: *trustProxy})
+	respBytes := *respMB << 20
+	if respBytes == 0 {
+		respBytes = -1
+	}
+	app := api.New(api.Options{Store: st, Log: log, StaticDir: *static, RateRPS: *rateRPS, RateBurst: *rateBurst, TrustProxy: *trustProxy, RespCacheBytes: respBytes})
 	go app.Run(ctx)
 
 	srv := &http.Server{

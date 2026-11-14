@@ -186,45 +186,6 @@ func TestLapCacheAndSingleflight(t *testing.T) {
 	}
 }
 
-func TestCacheEvictsByBytes(t *testing.T) {
-	c := newLapCache(cacheShards * 3 * int64(mkLap(1, 1, 300, 0, 0).SizeBytes()))
-	for lap := 0; lap < 400; lap++ {
-		c.put(lapKey{session: 1, driver: 1, lap: lap}, mkLap(1, lap, 300, 0, 0))
-	}
-	var used int64
-	for i := range c.shards {
-		sh := &c.shards[i]
-		if sh.used > sh.limit {
-			t.Fatalf("shard %d over budget: %d > %d", i, sh.used, sh.limit)
-		}
-		if len(sh.items) != sh.ll.Len() {
-			t.Fatal("map and list disagree")
-		}
-		used += sh.used
-	}
-	if used != c.bytes.Load() || used == 0 {
-		t.Fatalf("byte accounting: shards=%d total=%d", used, c.bytes.Load())
-	}
-	// LRU order: touching an entry protects it from the next eviction.
-	lru := newLapCache(cacheShards * 2 * int64(mkLap(1, 1, 300, 0, 0).SizeBytes()))
-	k := func(l int) lapKey { return lapKey{session: 16 * l} } // same shard for every key
-	lru.put(k(1), mkLap(1, 1, 300, 0, 0))
-	lru.put(k(2), mkLap(1, 2, 300, 0, 0))
-	lru.get(k(1))
-	lru.put(k(3), mkLap(1, 3, 300, 0, 0))
-	if _, ok := lru.get(k(1)); !ok {
-		t.Fatal("recently used entry was evicted")
-	}
-	if _, ok := lru.get(k(2)); ok {
-		t.Fatal("least recently used entry survived")
-	}
-	// An entry bigger than a shard is not cached.
-	lru.put(k(9), mkLap(1, 9, 100_000, 0, 0))
-	if _, ok := lru.get(k(9)); ok {
-		t.Fatal("oversized entry cached")
-	}
-}
-
 func TestReloadSwapsRebuiltSegment(t *testing.T) {
 	dir := t.TempDir()
 	first := writeSession(t, dir, 10, 2024, 100)
