@@ -15,6 +15,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -117,6 +118,12 @@ func Open(path string, syncEvery time.Duration) (*Writer, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return nil, err
+	}
+	// Make the file's directory entry durable too; fsync on the file alone
+	// does not guarantee the file still exists after a power loss.
+	if d, err := os.Open(filepath.Dir(path)); err == nil {
+		d.Sync()
+		d.Close()
 	}
 	w := &Writer{f: f, buf: bufio.NewWriterSize(f, 256<<10), syncEvery: syncEvery}
 	if syncEvery > 0 {

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/AnanmayS/f1-telemetry-go/internal/model"
@@ -42,10 +43,18 @@ func (f *flight) do(k lapKey, fn func() (*model.LapData, error)) (d *model.LapDa
 	f.calls[k] = c
 	f.mu.Unlock()
 
+	// Deferred so that a panic in fn still releases the waiters and the key;
+	// otherwise every later request for this lap would block forever.
+	defer func() {
+		if r := recover(); r != nil {
+			c.err = fmt.Errorf("store: lap load panicked: %v", r)
+			d, err = nil, c.err
+		}
+		f.mu.Lock()
+		delete(f.calls, k)
+		f.mu.Unlock()
+		c.wg.Done()
+	}()
 	c.data, c.err = fn()
-	f.mu.Lock()
-	delete(f.calls, k)
-	f.mu.Unlock()
-	c.wg.Done()
 	return c.data, c.err, false
 }

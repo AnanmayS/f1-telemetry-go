@@ -133,3 +133,26 @@ func SegmentFileName(session int, data []byte) (name, sum string) {
 	sum = hex.EncodeToString(h[:])
 	return fmt.Sprintf("%d-%s.seg", session, sum[:12]), sum
 }
+
+// Update applies fn to the manifest under an exclusive file lock and saves
+// the result. Every writer (batch ingest, live seal) must go through it:
+// loading, changing and saving without the lock lets a slower writer
+// overwrite a faster one's entry. fn sees the manifest as it is on disk now.
+func Update(dir string, fn func(m *Manifest) error) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	unlock, err := lockFile(filepath.Join(dir, ManifestName+".lock"))
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	m, err := LoadManifest(dir)
+	if err != nil {
+		return err
+	}
+	if err := fn(m); err != nil {
+		return err
+	}
+	return m.Save(dir)
+}

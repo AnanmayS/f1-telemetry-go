@@ -103,7 +103,7 @@ Lap record (40 bytes):
 
 ## Manifest
 
-`data/MANIFEST` is JSON listing each live segment: `session_key`, `year`, `file`, `size`, `sha256`, `samples`, plus a `version` that increases on every write and a `skipped` map of sessions with no telemetry. It is replaced by writing `MANIFEST.tmp`, `fsync`, atomic rename, then `fsync` of the directory. A segment file is durable before the manifest names it.
+`data/MANIFEST` is JSON listing each live segment: `session_key`, `year`, `file`, `size`, `sha256`, `samples`, plus a `version` that increases on every write and a `skipped` map of sessions with no telemetry. It is replaced by writing `MANIFEST.tmp`, `fsync`, atomic rename, then `fsync` of the directory. A segment file is durable before the manifest names it. Writers (batch ingest and live seal) change it only inside `store.Update`, which holds an exclusive `flock` on `MANIFEST.lock` and re-reads the file under the lock, so two writers cannot overwrite each other's entries.
 
 Segment files are named `{session_key}-{first 12 hex of sha256}.seg`. Rebuilding a session produces a new file name; the server swaps it in on its next manifest reload and unmaps the old file when the last in-flight read releases it.
 

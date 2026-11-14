@@ -242,7 +242,8 @@ func Parse(data []byte) (*Segment, error) {
 			offset: le.Uint64(e[4:]),
 			length: le.Uint32(e[12:]),
 		}
-		if b.length < blockOverhead || b.offset < blocksStart || b.offset+uint64(b.length) > indexOff {
+		// Written so that a huge offset cannot wrap the addition and slip through.
+		if b.length < blockOverhead || b.offset < blocksStart || b.offset > indexOff || uint64(b.length) > indexOff-b.offset {
 			return nil, fmt.Errorf("%w: block %d bounds", ErrCorrupt, i)
 		}
 		if i > 0 && s.blocks[i-1].key >= b.key {

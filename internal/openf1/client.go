@@ -95,7 +95,19 @@ func (c *Client) Fetch(ctx context.Context, cachePath, query string, maxAge time
 	if err != nil {
 		return nil, err
 	}
+	if err := checkArray(query, body); err != nil {
+		return nil, err
+	}
 	return body, writeGzip(filepath.Join(c.CacheDir, cachePath), body)
+}
+
+// checkArray rejects a 200 response that is not a JSON array (a proxy error
+// page, say) before it can reach the write-once cache and poison every rerun.
+func checkArray(query string, body []byte) error {
+	if t := bytes.TrimSpace(body); len(t) == 0 || t[0] != '[' || !json.Valid(t) {
+		return fmt.Errorf("openf1: %s: response is not a JSON array: %s", query, snippet(body))
+	}
+	return nil
 }
 
 // cached returns the cache entry if it is usable. In offline mode a miss is
@@ -139,6 +151,9 @@ func (c *Client) FetchWindowed(ctx context.Context, cachePath, query string, fro
 		}
 	}
 	if err != nil {
+		return nil, err
+	}
+	if err := checkArray(query, body); err != nil {
 		return nil, err
 	}
 	return body, writeGzip(filepath.Join(c.CacheDir, cachePath), body)

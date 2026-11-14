@@ -300,3 +300,30 @@ func TestTooLargeGivesUpAtMinimumWindow(t *testing.T) {
 		t.Fatal("failure was cached")
 	}
 }
+
+// A 200 that is not a JSON array must fail without being cached, so the
+// next run can succeed.
+func TestNonArrayBodyIsNotCached(t *testing.T) {
+	var n atomic.Int64
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch n.Add(1) {
+		case 1:
+			w.Write([]byte("<html>gateway error</html>"))
+		case 2:
+			w.Write([]byte(`{"detail":"something else"}`))
+		default:
+			w.Write([]byte(` [{"driver_number":1,"name_acronym":"VER"}]`))
+		}
+	})
+	for i := 0; i < 2; i++ {
+		if _, _, err := c.Drivers(context.Background(), 5); err == nil {
+			t.Fatalf("attempt %d: bad body accepted", i)
+		}
+		if _, err := os.Stat(filepath.Join(c.CacheDir, "5", "drivers_all.json.gz")); !os.IsNotExist(err) {
+			t.Fatal("bad body was cached")
+		}
+	}
+	if d, _, err := c.Drivers(context.Background(), 5); err != nil || len(d) != 1 {
+		t.Fatalf("recovery: %v %v", d, err)
+	}
+}

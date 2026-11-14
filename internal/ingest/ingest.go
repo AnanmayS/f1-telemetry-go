@@ -117,9 +117,15 @@ func (in *Ingester) Session(ctx context.Context, s model.Session) (Result, error
 		if len(meta.Drivers) == 0 {
 			res.Skipped = "no drivers"
 		}
-		man.Skip(s.Key, res.Skipped)
 		res.Elapsed = time.Since(start)
-		return res, man.Save(in.DataDir)
+		// The manifest is re-read under the lock: this build took minutes and
+		// another writer (a live seal) may have saved in the meantime.
+		return res, store.Update(in.DataDir, func(m *store.Manifest) error {
+			if _, ok := m.Find(s.Key); !ok {
+				m.Skip(s.Key, res.Skipped)
+			}
+			return nil
+		})
 	}
 	segDir := filepath.Join(in.DataDir, store.SegmentDir)
 	if err := os.MkdirAll(segDir, 0o755); err != nil {
@@ -131,8 +137,12 @@ func (in *Ingester) Session(ctx context.Context, s model.Session) (Result, error
 	}
 	// The segment is durable before the manifest names it, so a crash here
 	// leaves at worst an unreferenced file, never a visible half-written one.
-	old := man.Put(store.Entry{SessionKey: s.Key, Year: s.Year, File: name, Size: int64(len(data)), SHA256: sum, Samples: meta.Samples})
-	if err := man.Save(in.DataDir); err != nil {
+	var old string
+	err = store.Update(in.DataDir, func(m *store.Manifest) error {
+		old = m.Put(store.Entry{SessionKey: s.Key, Year: s.Year, File: name, Size: int64(len(data)), SHA256: sum, Samples: meta.Samples})
+		return nil
+	})
+	if err != nil {
 		return res, err
 	}
 	if old != "" {
@@ -225,8 +235,8 @@ func (in *Ingester) Fetch(ctx context.Context, s model.Session) (*Raw, error) {
 
 // BuildSegment slices every driver's laps, normalises distance and
 // serialises the session. It returns nil data when there is no telemetry.
-// The live path uses the same function, so a sealed live session and a
-// batch-ingested one are built identically.
+// The live path uses the same function with the same metadata, so a sealed
+// live session is byte-identical to a batch-ingested one.
 func BuildSegment(meta segment.Meta, timing map[int][]laps.Timing, car map[int][]laps.Car, loc map[int][]laps.Loc) (data []byte, out segment.Meta, nLaps int, err error) {
 	var built []*laps.Built
 	for _, d := range meta.Drivers {

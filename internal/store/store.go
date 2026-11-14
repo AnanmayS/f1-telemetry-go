@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -37,7 +39,6 @@ type Store struct {
 	// live holds in-memory segments of sessions still being ingested. They are
 	// served like any other segment until the session is sealed into the manifest.
 	live map[int]*openSegment
-	rev  int64 // bumped on every published snapshot
 
 	cache  *lru.Cache[lapKey, *model.LapData]
 	flight flight
@@ -46,8 +47,8 @@ type Store struct {
 }
 
 type snapshot struct {
-	version  int64 // manifest version
-	rev      int64 // changes whenever the set of served segments changes
+	version  int64  // manifest version
+	rev      string // identifies the set of served segment builds
 	segs     map[int]*openSegment
 	sessions []model.Session // newest first
 	years    []int           // newest first
@@ -102,6 +103,7 @@ func (s *Store) Reload() (bool, error) {
 		return false, nil
 	}
 	next := &snapshot{version: man.Version, segs: make(map[int]*openSegment, len(man.Segments))}
+	failed := false
 	for _, e := range man.Segments {
 		if cur, ok := old.segs[e.SessionKey]; ok && cur.entry.File == e.File {
 			next.segs[e.SessionKey] = cur
@@ -118,6 +120,7 @@ func (s *Store) Reload() (bool, error) {
 		}
 		if err != nil {
 			s.log.Error("segment unavailable", "session", e.SessionKey, "file", e.File, "err", err)
+			failed = true
 			if cur, ok := old.segs[e.SessionKey]; ok {
 				next.segs[e.SessionKey] = cur // keep serving the previous build
 			}
@@ -131,6 +134,11 @@ func (s *Store) Reload() (bool, error) {
 		} else {
 			next.segs[key] = o
 		}
+	}
+	if failed {
+		// Keep the old version so the next Reload tries the failed files again
+		// (the cause may be transient, such as running out of file descriptors).
+		next.version = old.version
 	}
 	s.publish(next, old)
 	s.log.Info("manifest loaded", "version", man.Version, "segments", len(next.segs))
@@ -151,8 +159,18 @@ func (s *Store) publish(next, old *snapshot) {
 	}
 	sort.Slice(next.sessions, func(i, j int) bool { return next.sessions[i].Start.After(next.sessions[j].Start) })
 	sort.Sort(sort.Reverse(sort.IntSlice(next.years)))
-	s.rev++
-	next.rev = s.rev
+	// The revision is derived from content (which build of which session is
+	// served), so it means the same thing across restarts and replicas.
+	keys := make([]int, 0, len(next.segs))
+	for k := range next.segs {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	h := sha256.New()
+	for _, k := range keys {
+		fmt.Fprintf(h, "%d=%s;", k, next.segs[k].entry.SHA256)
+	}
+	next.rev = hex.EncodeToString(h.Sum(nil)[:12])
 	s.snap.Store(next)
 	for key, o := range old.segs {
 		if next.segs[key] != o {
@@ -206,9 +224,10 @@ func (s *Store) ClearLive(key int) {
 	s.publish(next, old)
 }
 
-// Rev changes whenever the set of served segments changes (manifest reload
-// or live update). Listings use it as their cache validator.
-func (s *Store) Rev() int64 { return s.snap.Load().rev }
+// Rev identifies the set of served segment builds (sealed and live). It
+// changes whenever that set changes and is stable across restarts, so
+// listings use it as their cache validator.
+func (s *Store) Rev() string { return s.snap.Load().rev }
 
 // Watch reloads the manifest every interval until ctx is done.
 func (s *Store) Watch(ctx context.Context, interval time.Duration) {

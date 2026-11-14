@@ -328,3 +328,102 @@ func TestConcurrentReadsDuringReloads(t *testing.T) {
 	close(stop)
 	wg.Wait()
 }
+
+func TestManifestUpdateSerialisesWriters(t *testing.T) {
+	dir := t.TempDir()
+	var wg sync.WaitGroup
+	for i := 1; i <= 40; i++ {
+		wg.Add(1)
+		go func(key int) {
+			defer wg.Done()
+			err := Update(dir, func(m *Manifest) error {
+				time.Sleep(time.Millisecond) // widen the window a lost update would need
+				m.Put(Entry{SessionKey: key, File: "f"})
+				return nil
+			})
+			if err != nil {
+				t.Error(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	m, err := LoadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Segments) != 40 || m.Version != 40 {
+		t.Fatalf("%d entries at version %d, want 40 and 40: a writer overwrote another", len(m.Segments), m.Version)
+	}
+	// A failing update changes nothing.
+	boom := errors.New("boom")
+	if err := Update(dir, func(m *Manifest) error { m.Put(Entry{SessionKey: 99}); return boom }); !errors.Is(err, boom) {
+		t.Fatal(err)
+	}
+	if m, _ := LoadManifest(dir); len(m.Segments) != 40 {
+		t.Fatal("failed update was saved")
+	}
+}
+
+// The listing validator is derived from what is served, so it survives a
+// restart unchanged and changes when a session is rebuilt.
+func TestRevIsContentDerived(t *testing.T) {
+	dir := t.TempDir()
+	writeSession(t, dir, 10, 2024, 100)
+	a, _ := Open(dir, 0, quiet)
+	revA := a.Rev()
+	a.Close()
+	b, _ := Open(dir, 0, quiet)
+	defer b.Close()
+	if b.Rev() != revA || revA == "" {
+		t.Fatalf("rev changed across a restart with the same data: %q vs %q", revA, b.Rev())
+	}
+	writeSession(t, dir, 10, 2024, 101)
+	b.Reload()
+	if b.Rev() == revA {
+		t.Fatal("rev unchanged after a session was rebuilt")
+	}
+}
+
+func TestReloadRetriesSegmentsThatFailedToOpen(t *testing.T) {
+	dir := t.TempDir()
+	writeSession(t, dir, 10, 2024, 100)
+	e := writeSession(t, dir, 11, 2024, 100)
+	path := filepath.Join(dir, SegmentDir, e.File)
+	good, _ := os.ReadFile(path)
+	os.WriteFile(path, good[:100], 0o644) // unreadable for now
+	s, err := Open(dir, 0, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.Acquire(11); err == nil {
+		t.Fatal("damaged segment served")
+	}
+	os.WriteFile(path, good, 0o644) // the problem goes away; the manifest is untouched
+	if _, err := s.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	if sess, err := s.Acquire(11); err != nil {
+		t.Fatalf("segment not retried after it became readable: %v", err)
+	} else {
+		sess.Release()
+	}
+}
+
+func TestFlightSurvivesPanic(t *testing.T) {
+	var f flight
+	k := lapKey{session: 1}
+	if _, err, _ := f.do(k, func() (*model.LapData, error) { panic("boom") }); err == nil {
+		t.Fatal("panic was not turned into an error")
+	}
+	done := make(chan struct{})
+	go func() {
+		f.do(k, func() (*model.LapData, error) { return &model.LapData{}, nil })
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a panic left the key locked: later requests for the lap hang")
+	}
+}

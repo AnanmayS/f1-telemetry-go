@@ -227,10 +227,10 @@ func (r *Runner) Replay(ctx context.Context, raw *ingest.Raw, speed float64) err
 		stop()
 		return err
 	}
+	stop() // the background reporter must be gone before the final report, or it could emit an older value after it
 	if r.OnDurable != nil {
 		r.OnDurable(sess.DurableSeq())
 	}
-	stop()
 	entry, err := sess.Seal(r.DataDir)
 	if err != nil {
 		return err

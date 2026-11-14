@@ -76,7 +76,9 @@ func main() {
 		IdleTimeout:       2 * time.Minute,
 		MaxHeaderBytes:    16 << 10,
 	}
+	drained := make(chan struct{})
 	go func() {
+		defer close(drained)
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -87,6 +89,7 @@ func main() {
 		log.Error("server failed", "err", err)
 		os.Exit(1)
 	}
+	<-drained // ListenAndServe returns as soon as Shutdown starts; wait for in-flight requests
 }
 
 // replay feeds a recorded session from the raw cache through the live path:

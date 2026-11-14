@@ -1,7 +1,9 @@
 package segment
 
 import (
+	"encoding/binary"
 	"errors"
+	"hash/crc32"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -257,4 +259,23 @@ func FuzzParse(f *testing.F) {
 		s.Blocks()
 		s.Verify()
 	})
+}
+
+// A block offset near 2^64 must not wrap the bounds check. The index CRC is
+// recomputed, so this is a deliberately crafted file, not random damage.
+func TestHugeBlockOffsetIsRejected(t *testing.T) {
+	data, _ := buildTest(t)
+	le := binary.LittleEndian
+	foot := len(data) - footerSize
+	indexOff := int(le.Uint64(data[foot:]))
+	for _, off := range []uint64{^uint64(0) - 4, ^uint64(0), uint64(foot) + 1} {
+		bad := slices.Clone(data)
+		le.PutUint64(bad[indexOff+4+4:], off) // first index entry's offset field
+		le.PutUint32(bad[foot+12:], crc32.ChecksumIEEE(bad[indexOff:foot]))
+		s, err := Parse(bad)
+		if !errors.Is(err, ErrCorrupt) {
+			t.Fatalf("offset %#x: Parse err = %v; reading it would panic", off, err)
+		}
+		_ = s
+	}
 }

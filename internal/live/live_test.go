@@ -157,6 +157,16 @@ func sealedSegment(t testing.TB, dataDir string) *segment.Segment {
 	if !ok {
 		t.Fatal("session not in manifest")
 	}
+	// Stronger than lap equality: the sealed file is byte-for-byte what batch
+	// ingest writes for the same recording.
+	raw := loadRaw(t, dataDir)
+	batch, _, _, err := ingest.BuildSegment(raw.Meta, raw.Timing, raw.Car, raw.Loc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, sum := store.SegmentFileName(testSession, batch); sum != e.SHA256 {
+		t.Fatalf("sealed segment hash %s differs from the batch build %s", e.SHA256[:12], sum[:12])
+	}
 	seg, err := segment.Open(filepath.Join(dataDir, store.SegmentDir, e.File))
 	if err != nil {
 		t.Fatal(err)

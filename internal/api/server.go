@@ -199,7 +199,7 @@ type sessionJSON struct {
 }
 
 func (s *Server) handleSeasons(w http.ResponseWriter, r *http.Request) *apiError {
-	if notModified(w, r, etag("seasons", fmt.Sprint(s.store.Rev())), cacheList) {
+	if notModified(w, r, etag("seasons", s.store.Rev()), cacheList) {
 		return nil
 	}
 	years := s.store.Years()
@@ -219,7 +219,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) *apiErro
 		}
 		year = y
 	}
-	if notModified(w, r, etag("sessions", fmt.Sprint(s.store.Rev()), fmt.Sprint(year)), cacheList) {
+	if notModified(w, r, etag("sessions", s.store.Rev(), fmt.Sprint(year)), cacheList) {
 		return nil
 	}
 	list := s.store.Sessions(year)

@@ -37,6 +37,12 @@ type Session struct {
 	version   uint64 // bumped by every applied event
 }
 
+// sourceMeta keeps what describes the source (session, drivers, raw sizes)
+// and drops what Build derives (circuit length, stored sample count).
+func sourceMeta(m segment.Meta) segment.Meta {
+	return segment.Meta{Session: m.Session, Drivers: m.Drivers, RawSamples: m.RawSamples, RawJSONBytes: m.RawJSONBytes}
+}
+
 // WALPath is where a session's log lives.
 func WALPath(liveDir string, sessionKey int) string {
 	return filepath.Join(liveDir, fmt.Sprintf("%d.wal", sessionKey))
@@ -49,7 +55,7 @@ func Open(liveDir string, meta segment.Meta, syncEvery time.Duration) (*Session,
 		return nil, err
 	}
 	s := &Session{
-		meta: segment.Meta{Session: meta.Session, Drivers: meta.Drivers}, walPath: WALPath(liveDir, meta.Session.Key),
+		meta: sourceMeta(meta), walPath: WALPath(liveDir, meta.Session.Key),
 		car: map[int][]laps.Car{}, loc: map[int][]laps.Loc{}, timing: map[int]map[int]laps.Timing{},
 	}
 	sawMeta := false
@@ -62,7 +68,7 @@ func Open(liveDir string, meta segment.Meta, syncEvery time.Duration) (*Session,
 			if m.Session.Key != meta.Session.Key {
 				return fmt.Errorf("live: WAL %s belongs to session %d", s.walPath, m.Session.Key)
 			}
-			s.meta, sawMeta = segment.Meta{Session: m.Session, Drivers: m.Drivers}, true
+			s.meta, sawMeta = sourceMeta(m), true
 			return nil
 		}
 		ev, err := decodeEvent(p)
@@ -201,7 +207,9 @@ func (s *Session) Build() (data []byte, meta segment.Meta, version uint64, err e
 	for d := range loc {
 		loc[d] = laps.CleanLoc(loc[d])
 	}
-	m.RawSamples = rawSamples
+	if m.RawSamples == 0 {
+		m.RawSamples = rawSamples // a real feed has no "rows fetched" figure; count what arrived
+	}
 	data, meta, _, err = ingest.BuildSegment(m, timing, car, loc)
 	return data, meta, version, err
 }
@@ -227,13 +235,12 @@ func (s *Session) Seal(dataDir string) (store.Entry, error) {
 	if err := segment.WriteFile(filepath.Join(segDir, name), data); err != nil {
 		return store.Entry{}, err
 	}
-	man, err := store.LoadManifest(dataDir)
-	if err != nil {
-		return store.Entry{}, err
-	}
 	e := store.Entry{SessionKey: meta.Session.Key, Year: meta.Session.Year, File: name, Size: int64(len(data)), SHA256: sum, Samples: meta.Samples}
-	old := man.Put(e)
-	if err := man.Save(dataDir); err != nil {
+	var old string
+	if err := store.Update(dataDir, func(m *store.Manifest) error {
+		old = m.Put(e)
+		return nil
+	}); err != nil {
 		return store.Entry{}, err
 	}
 	if old != "" {
