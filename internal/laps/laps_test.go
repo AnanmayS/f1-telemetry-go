@@ -236,3 +236,16 @@ func TestCompareFinalDeltaEqualsLapTimeDifference(t *testing.T) {
 		t.Fatalf("mid-lap delta = %.4f, want 0.75", c.DeltaS[500])
 	}
 }
+
+func TestCompareStationaryAtTheLine(t *testing.T) {
+	// B stops 2 s before its official lap end: distance is flat over the last
+	// samples, so interpolation alone would report an early finish.
+	a := lapOf(0, []int64{0, 50_000, 100_000}, []int64{0, 250_000, 500_000}, make([]int64, 3), make([]int64, 3))
+	a.Lap.OfficialMs, a.Lap.Flags = 100_000, model.FlagValidTime|model.FlagDistanceOK
+	b := lapOf(0, []int64{0, 50_000, 103_000, 105_000}, []int64{0, 250_000, 500_000, 500_000}, make([]int64, 4), make([]int64, 4))
+	b.Lap.OfficialMs, b.Lap.Flags = 105_000, model.FlagValidTime|model.FlagDistanceOK
+	c := Compare(a, b, 5000, 5000, 100, nil)
+	if math.Abs(c.FinalDeltaS-5) > 1e-9 {
+		t.Fatalf("final delta = %.3f, want 5.000 (official difference)", c.FinalDeltaS)
+	}
+}

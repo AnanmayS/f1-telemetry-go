@@ -108,6 +108,17 @@ func Compare(a, b *model.LapData, lengthA, lengthB, step float64, channels []mod
 		posB[i] = d * lengthB / lengthA
 	}
 	c := &Comparison{DistanceM: grid, A: Resample(a, grid, channels), B: Resample(b, posB, channels), FinalDeltaS: math.NaN()}
+	// The last grid point is the timing line. A normalised lap reaches it at
+	// exactly its official time; pin that, because interpolation is ambiguous
+	// when a car is stationary there (distance stops increasing).
+	if n := len(grid); n > 0 {
+		if a.Lap.DistanceOK() {
+			c.A.TimeS[n-1] = float64(a.Lap.OfficialMs) / 1000
+		}
+		if b.Lap.DistanceOK() {
+			c.B.TimeS[n-1] = float64(b.Lap.OfficialMs) / 1000
+		}
+	}
 	c.DeltaS = make([]float64, len(grid))
 	for i := range grid {
 		c.DeltaS[i] = c.B.TimeS[i] - c.A.TimeS[i]
