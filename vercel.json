@@ -7,7 +7,7 @@
   "outputDirectory": "web/dist",
   "functions": {
     "api/index.go": {
-      "includeFiles": "data/**",
+      "includeFiles": "{data/**,api/data/**}",
       "maxDuration": 30
     }
   },

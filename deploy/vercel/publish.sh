@@ -20,8 +20,10 @@ fi
 TMP=$(mktemp -d)
 trap 'git worktree remove --force "$TMP/tree" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 git worktree add --quiet --detach "$TMP/tree" HEAD
-go run ./cmd/bundle -data "$DATA" -out "$TMP/tree/data" -max-mb "$MAX_MB"
-git -C "$TMP/tree" add --force data
+# The bundle sits next to the function source (api/data): that is the layout
+# Vercel's Go builder picks up for includeFiles.
+go run ./cmd/bundle -data "$DATA" -out "$TMP/tree/api/data" -max-mb "$MAX_MB"
+git -C "$TMP/tree" add --force api/data
 git -C "$TMP/tree" commit --quiet -m "Data bundle for Vercel ($(date -u +%Y-%m-%d), from $(git rev-parse --short HEAD))"
 git push --quiet --force origin "$(git -C "$TMP/tree" rev-parse HEAD):refs/heads/$BRANCH"
 echo "pushed $BRANCH at $(git -C "$TMP/tree" rev-parse --short HEAD)"

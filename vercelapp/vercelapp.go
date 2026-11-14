@@ -11,6 +11,7 @@ package vercelapp
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,6 +22,8 @@ import (
 	"github.com/AnanmayS/f1-telemetry-go/internal/api"
 	"github.com/AnanmayS/f1-telemetry-go/internal/store"
 )
+
+var debugListing string
 
 var (
 	once sync.Once
@@ -54,7 +57,7 @@ func setup() {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]string{"error": "data is not available", "code": "unavailable"})
+			json.NewEncoder(w).Encode(map[string]string{"error": "data is not available", "code": "unavailable", "debug": debugListing})
 		})
 		return
 	}
@@ -74,10 +77,15 @@ func setup() {
 func findData(log *slog.Logger) string {
 	cwd, _ := os.Getwd()
 	exe, _ := os.Executable()
-	candidates := []string{os.Getenv("GHOSTLAP_DATA"), "data", filepath.Join(filepath.Dir(exe), "data"),
-		"/var/task/data", filepath.Join(cwd, "..", "data"), os.Getenv("LAMBDA_TASK_ROOT") + "/data"}
+	root := os.Getenv("LAMBDA_TASK_ROOT")
+	if root == "" {
+		root = "/var/task"
+	}
+	candidates := []string{os.Getenv("GHOSTLAP_DATA"), "data", filepath.Join("api", "data"),
+		filepath.Join(filepath.Dir(exe), "data"), filepath.Join(filepath.Dir(exe), "api", "data"),
+		filepath.Join(root, "data"), filepath.Join(root, "api", "data"), filepath.Join(cwd, "..", "data")}
 	for _, c := range candidates {
-		if c == "" || c == "/data" {
+		if c == "" {
 			continue
 		}
 		if _, err := os.Stat(filepath.Join(c, store.ManifestName)); err == nil {
@@ -94,5 +102,6 @@ func findData(log *slog.Logger) string {
 		}
 	}
 	log.Error("data bundle not found", "cwd", cwd, "exe", exe, "tried", candidates, "listing", seen)
+	debugListing = fmt.Sprint("cwd=", cwd, " exe=", exe, " listing=", seen) // TEMPORARY: remove once the layout is known
 	return ""
 }
