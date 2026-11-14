@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -64,7 +66,7 @@ func TestNoResultsIsCachedAsEmpty(t *testing.T) {
 		w.Write([]byte(`{"detail":"No results found."}`))
 	})
 	for i := 0; i < 2; i++ {
-		rows, _, err := c.CarData(context.Background(), 1, 2)
+		rows, _, err := c.CarData(context.Background(), 1, 2, Window{})
 		if err != nil || len(rows) != 0 {
 			t.Fatalf("rows=%v err=%v", rows, err)
 		}
@@ -185,7 +187,7 @@ func TestRateLimitAndConcurrencyAreGlobal(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			if _, _, err := c.CarData(context.Background(), 1, i); err != nil {
+			if _, _, err := c.CarData(context.Background(), 1, i, Window{}); err != nil {
 				t.Error(err)
 			}
 		}(i)
@@ -213,5 +215,88 @@ func TestContextCancelStopsWaiting(t *testing.T) {
 	}
 	if time.Since(start) > 2*time.Second {
 		t.Fatal("cancel did not interrupt backoff")
+	}
+}
+
+// A session too long for one response is fetched in time windows, joined in
+// order, and cached as a single entry.
+func TestTooLargeIsSplitByTime(t *testing.T) {
+	start := time.Date(2023, 2, 23, 7, 0, 0, 0, time.UTC)
+	var windows []string
+	var mu sync.Mutex
+	c, hits := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		parse := func(marker string) time.Time {
+			i := strings.Index(raw, marker)
+			if i < 0 {
+				return time.Time{}
+			}
+			v := raw[i+len(marker):]
+			if j := strings.IndexByte(v, '&'); j >= 0 {
+				v = v[:j]
+			}
+			ts, err := time.Parse("2006-01-02T15:04:05Z", v)
+			if err != nil {
+				t.Errorf("bad date %q", v)
+			}
+			return ts
+		}
+		from, to := parse("date%3E="), parse("date%3C")
+		// Refuse anything wider than 3 hours, including the unbounded query.
+		if from.IsZero() || to.Sub(from) > 3*time.Hour {
+			w.WriteHeader(422)
+			w.Write([]byte(`{"detail":"Failed to retrieve information. You're likely asking for too much data at once."}`))
+			return
+		}
+		mu.Lock()
+		windows = append(windows, from.Format("15:04")+"-"+to.Format("15:04"))
+		mu.Unlock()
+		// One row per hour inside the window; empty windows are a 404.
+		var rows []string
+		for ts := from; ts.Before(to); ts = ts.Add(time.Hour) {
+			if ts.Hour() >= 7 && ts.Hour() < 16 {
+				rows = append(rows, `{"date":"`+ts.Format(time.RFC3339)+`","x":`+strconv.Itoa(ts.Hour())+`,"y":0,"z":0}`)
+			}
+		}
+		if len(rows) == 0 {
+			w.WriteHeader(404)
+			w.Write([]byte(`{"detail":"No results found."}`))
+			return
+		}
+		w.Write([]byte("[" + strings.Join(rows, ",") + "]"))
+	})
+	win := Window{start.Add(-time.Hour), start.Add(11 * time.Hour)} // 12 h -> 6 h -> 3 h pieces
+	rows, _, err := c.Location(context.Background(), 9222, 10, win)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 9 {
+		t.Fatalf("rows = %d, want 9 (07:00..15:00)", len(rows))
+	}
+	for i, r := range rows {
+		if int(*r.X) != 7+i {
+			t.Fatalf("rows out of order or duplicated at %d: x=%v", i, *r.X)
+		}
+	}
+	if len(windows) != 4 || hits.Load() != 8 { // refused: unbounded, 12 h, two 6 h halves; then four 3 h quarters
+		t.Fatalf("windows=%v hits=%d", windows, hits.Load())
+	}
+	before := hits.Load()
+	if again, _, err := c.Location(context.Background(), 9222, 10, win); err != nil || len(again) != 9 || hits.Load() != before {
+		t.Fatalf("joined result not cached: rows=%d err=%v extra hits=%d", len(again), err, hits.Load()-before)
+	}
+}
+
+func TestTooLargeGivesUpAtMinimumWindow(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(422)
+		w.Write([]byte(`{"detail":"You're likely asking for too much data at once."}`))
+	})
+	start := time.Date(2023, 2, 23, 7, 0, 0, 0, time.UTC)
+	if _, _, err := c.CarData(context.Background(), 1, 1, Window{start, start.Add(15 * time.Minute)}); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(c.CacheDir, "1", "car_data_1.json.gz")); !os.IsNotExist(err) {
+		t.Fatal("failure was cached")
 	}
 }

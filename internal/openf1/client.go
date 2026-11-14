@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +37,9 @@ var (
 	// ErrRestricted means the API refused an unauthenticated request, which
 	// OpenF1 does for all queries while a session is live.
 	ErrRestricted = errors.New("openf1: access restricted (a session is probably live; retry later)")
+	// ErrTooLarge means the API refused to build a response that big (HTTP
+	// 422 on very long sessions). Callers split the query by time window.
+	ErrTooLarge = errors.New("openf1: response too large for one request")
 	// ErrOffline is returned for a cache miss when the client is offline.
 	ErrOffline = errors.New("openf1: not in cache and client is offline")
 )
@@ -84,26 +88,86 @@ func New(cacheDir string, perMinute float64, inFlight int) *Client {
 // reading CacheDir/cachePath when present and no older than maxAge
 // (0 = never expires). A "no results" 404 is cached as an empty array.
 func (c *Client) Fetch(ctx context.Context, cachePath, query string, maxAge time.Duration) ([]byte, error) {
-	full := filepath.Join(c.CacheDir, cachePath)
-	if st, err := os.Stat(full); err == nil && (maxAge == 0 || c.Offline || time.Since(st.ModTime()) < maxAge) {
-		if body, err := readGzip(full); err == nil {
-			c.CacheHits.Add(1)
-			return body, nil
-		} else {
-			c.Log.Warn("unreadable cache file, refetching", "path", full, "err", err)
-		}
-	}
-	if c.Offline {
-		return nil, fmt.Errorf("%w: %s", ErrOffline, cachePath)
+	if body, ok, err := c.cached(cachePath, maxAge); ok || err != nil {
+		return body, err
 	}
 	body, err := c.get(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	if err := writeGzip(full, body); err != nil {
+	return body, writeGzip(filepath.Join(c.CacheDir, cachePath), body)
+}
+
+// cached returns the cache entry if it is usable. In offline mode a miss is
+// an error.
+func (c *Client) cached(cachePath string, maxAge time.Duration) (body []byte, ok bool, err error) {
+	full := filepath.Join(c.CacheDir, cachePath)
+	if st, err := os.Stat(full); err == nil && (maxAge == 0 || c.Offline || time.Since(st.ModTime()) < maxAge) {
+		if body, err := readGzip(full); err == nil {
+			c.CacheHits.Add(1)
+			return body, true, nil
+		} else {
+			c.Log.Warn("unreadable cache file, refetching", "path", full, "err", err)
+		}
+	}
+	if c.Offline {
+		return nil, false, fmt.Errorf("%w: %s", ErrOffline, cachePath)
+	}
+	return nil, false, nil
+}
+
+// minWindow is the smallest time slice a too-large query is split into.
+const minWindow = 5 * time.Minute
+
+// FetchWindowed is Fetch for time-series endpoints. If the API refuses the
+// whole response as too large, the query is split into time windows over
+// [from, to) (halving until each piece is accepted) and the rows are joined.
+// The cache holds the joined result, so the split happens once.
+func (c *Client) FetchWindowed(ctx context.Context, cachePath, query string, from, to time.Time) ([]byte, error) {
+	if body, ok, err := c.cached(cachePath, 0); ok || err != nil {
+		return body, err
+	}
+	body, err := c.get(ctx, query)
+	if errors.Is(err, ErrTooLarge) && to.After(from) {
+		c.Log.Info("response too large, splitting by time", "query", query)
+		var rows []json.RawMessage
+		if rows, err = c.getWindow(ctx, query, from, to); err == nil {
+			if rows == nil {
+				rows = []json.RawMessage{}
+			}
+			body, err = json.Marshal(rows)
+		}
+	}
+	if err != nil {
 		return nil, err
 	}
-	return body, nil
+	return body, writeGzip(filepath.Join(c.CacheDir, cachePath), body)
+}
+
+func (c *Client) getWindow(ctx context.Context, query string, from, to time.Time) ([]json.RawMessage, error) {
+	const layout = "2006-01-02T15:04:05Z"
+	q := fmt.Sprintf("%s&date%%3E=%s&date%%3C%s", query, from.UTC().Format(layout), to.UTC().Format(layout))
+	body, err := c.get(ctx, q)
+	if errors.Is(err, ErrTooLarge) && to.Sub(from) > minWindow {
+		mid := from.Add(to.Sub(from) / 2).Truncate(time.Second)
+		a, err := c.getWindow(ctx, query, from, mid)
+		if err != nil {
+			return nil, err
+		}
+		b, err := c.getWindow(ctx, query, mid, to)
+		if err != nil {
+			return nil, err
+		}
+		return append(a, b...), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var rows []json.RawMessage
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, fmt.Errorf("openf1: decoding %s: %w", q, err)
+	}
+	return rows, nil
 }
 
 func (c *Client) get(ctx context.Context, query string) ([]byte, error) {
@@ -173,6 +237,8 @@ func (c *Client) once(ctx context.Context, query string) (body []byte, retry boo
 		return body, false, nil
 	case resp.StatusCode == http.StatusNotFound && bytes.Contains(body, []byte("No results found")):
 		return []byte("[]"), false, nil
+	case resp.StatusCode == http.StatusUnprocessableEntity && bytes.Contains(body, []byte("too much data")):
+		return nil, false, fmt.Errorf("%w (%s)", ErrTooLarge, query)
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		return nil, false, fmt.Errorf("%w (http %d: %s)", ErrRestricted, resp.StatusCode, snippet(body))
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:

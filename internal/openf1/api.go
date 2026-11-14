@@ -98,10 +98,33 @@ func (c *Client) Laps(ctx context.Context, session int) ([]Lap, int, error) {
 	return fetch[Lap](ctx, c, fmt.Sprintf("%d/laps_all.json.gz", session), fmt.Sprintf("laps?session_key=%d", session), 0)
 }
 
-func (c *Client) CarData(ctx context.Context, session, driver int) ([]CarData, int, error) {
-	return fetch[CarData](ctx, c, fmt.Sprintf("%d/car_data_%d.json.gz", session, driver), fmt.Sprintf("car_data?session_key=%d&driver_number=%d", session, driver), 0)
+// Window is the time range a session's telemetry is split over when one
+// response would be too large. It is generous on both sides: sessions start
+// late, get red-flagged and overrun.
+type Window struct{ From, To time.Time }
+
+// SessionWindow covers a session from an hour before its scheduled start to
+// four hours after its scheduled end.
+func SessionWindow(start, end time.Time) Window {
+	return Window{start.Add(-time.Hour), end.Add(4 * time.Hour)}
 }
 
-func (c *Client) Location(ctx context.Context, session, driver int) ([]Location, int, error) {
-	return fetch[Location](ctx, c, fmt.Sprintf("%d/location_%d.json.gz", session, driver), fmt.Sprintf("location?session_key=%d&driver_number=%d", session, driver), 0)
+func fetchWindowed[T any](ctx context.Context, c *Client, cachePath, query string, w Window) ([]T, int, error) {
+	body, err := c.FetchWindowed(ctx, cachePath, query, w.From, w.To)
+	if err != nil {
+		return nil, 0, err
+	}
+	var rows []T
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, 0, fmt.Errorf("openf1: decoding %s: %w", cachePath, err)
+	}
+	return rows, len(body), nil
+}
+
+func (c *Client) CarData(ctx context.Context, session, driver int, w Window) ([]CarData, int, error) {
+	return fetchWindowed[CarData](ctx, c, fmt.Sprintf("%d/car_data_%d.json.gz", session, driver), fmt.Sprintf("car_data?session_key=%d&driver_number=%d", session, driver), w)
+}
+
+func (c *Client) Location(ctx context.Context, session, driver int, w Window) ([]Location, int, error) {
+	return fetchWindowed[Location](ctx, c, fmt.Sprintf("%d/location_%d.json.gz", session, driver), fmt.Sprintf("location?session_key=%d&driver_number=%d", session, driver), w)
 }

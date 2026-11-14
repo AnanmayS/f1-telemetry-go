@@ -186,6 +186,7 @@ func (in *Ingester) Build(ctx context.Context, s model.Session) (data []byte, me
 		mu    sync.Mutex
 		built []*laps.Built
 	)
+	window := openf1.SessionWindow(s.Start, s.End)
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(max(in.Workers, 1))
 	for _, d := range meta.Drivers {
@@ -193,11 +194,11 @@ func (in *Ingester) Build(ctx context.Context, s model.Session) (data []byte, me
 			continue // no laps, so nothing to slice; do not spend requests on it
 		}
 		g.Go(func() error {
-			car, nCar, err := in.Client.CarData(gctx, s.Key, d.Number)
+			car, nCar, err := in.Client.CarData(gctx, s.Key, d.Number, window)
 			if err != nil {
 				return fmt.Errorf("driver %d car_data: %w", d.Number, err)
 			}
-			loc, nLoc, err := in.Client.Location(gctx, s.Key, d.Number)
+			loc, nLoc, err := in.Client.Location(gctx, s.Key, d.Number, window)
 			if err != nil {
 				return fmt.Errorf("driver %d location: %w", d.Number, err)
 			}
