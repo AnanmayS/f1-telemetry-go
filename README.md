@@ -16,7 +16,7 @@ Underneath is a time-series storage engine written in Go for this one kind of da
 | M1 ingest + storage engine | Done. Full-corpus ingest takes about 12 hours at OpenF1's rate limit; see [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for how much was ingested when the numbers were taken. |
 | M2 query API | Done. [docs/API.md](docs/API.md). |
 | M3 web UI | Done. Tested in Chromium (desktop and phone viewports); Safari and Firefox not yet checked. |
-| M4 launch | Image, CI and deploy guide done ([docs/DEPLOY.md](docs/DEPLOY.md)). **Not deployed**: needs a VPS and a Cloudflare account. |
+| M4 launch | Hosted on Vercel at https://ghostlap-six.vercel.app with a bundle of the newest sessions (a Vercel Function is capped at 250 MB, so not the full corpus). Image, CI and guide for the VPS path are in [docs/DEPLOY.md](docs/DEPLOY.md); that path is not deployed. |
 | M5 live ingest | WAL, memtable, seal and crash test done, driven by replaying recorded sessions. No live network client: OpenF1's live feed is paid. |
 
 ## Numbers

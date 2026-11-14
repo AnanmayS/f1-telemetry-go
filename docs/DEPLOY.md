@@ -1,5 +1,33 @@
 # Deploying
 
+Two ways to host: **Vercel** (running now, limited data) or a **VPS** (the PRD's target, full corpus). The Vercel section is first; the VPS guide follows.
+
+## Vercel
+
+Live at **https://ghostlap-six.vercel.app** (project `ghostlap`, linked to this repository). The frontend is built by Vite and served from Vercel's CDN; `/api/*` is rewritten to one Go function (`api/index.go`) that runs the same HTTP layer as `cmd/server` over segments bundled into the deployment. Configuration is in `vercel.json`.
+
+**Limit: a Vercel Function may be at most 250 MB uncompressed, so only a bundle of the newest sessions is hosted** (default budget 200 MiB, roughly 70–80 sessions of about 470). The full corpus does not fit; it needs the VPS, or segments moved to object storage and fetched on demand.
+
+Publish data and code:
+
+```bash
+deploy/vercel/publish.sh
+```
+
+It builds a bundle with `cmd/bundle` into `api/data/` (next to the function source, which is where Vercel's Go builder picks up `includeFiles`), commits it on top of the current commit and force-pushes the single-commit branch `vercel-deploy`. Segments never enter `main`'s history.
+
+Pushing that branch creates a **preview** deployment, because the project's production branch is `main` (which is excluded from deploys: it has no data). To make every publish go live, set Production Branch to `vercel-deploy` once in the Vercel dashboard (Project → Settings → Environments → Production). Until then, promote the preview from the dashboard.
+
+Differences from the server:
+
+- No `/metrics` and no visitor counters: the page is served by the CDN, and function instances are short-lived. Use Vercel's own analytics if wanted.
+- The rate limit and both caches are per function instance. A burst of 400 parallel requests was not throttled in testing (it spreads over instances), so treat the limiter as ineffective here and rely on Vercel's platform protection. Shared caching comes from the CDN: data responses carry `s-maxage`.
+- No live path (no long-running process, no writable disk).
+
+---
+
+The rest of this document is the VPS deployment.
+
 Target: one small VPS (2 vCPU, 2–4 GB RAM, about 20 GB disk) behind Cloudflare. Nothing here has been run against a real host yet; the image was built and smoke-tested locally (`docker build`, then health, index page and a comparison served from a read-only container).
 
 ## 1. Build the data

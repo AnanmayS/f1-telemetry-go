@@ -464,7 +464,7 @@ func TestRateLimitIsPerIP(t *testing.T) {
 			t.Fatalf("trusted proxy request %d: %d, want %d", i, rec.Code, want)
 		}
 	}
-	l := newIPLimiter(1, 1, false)
+	l := newIPLimiter(1, 1, "")
 	l.allow("a", time.Unix(0, 0))
 	l.sweep(time.Unix(3600, 0), time.Minute)
 	for i := range l.shards {
@@ -704,5 +704,20 @@ func TestLiveSessionCaching(t *testing.T) {
 	}
 	if r := get(t, s, "/api/compare?a=100:1:3&b=100:4:1"); r.code != 200 || r.header.Get("Cache-Control") != cacheData {
 		t.Fatalf("sealed sessions affected: %d %q", r.code, r.header.Get("Cache-Control"))
+	}
+}
+
+func TestClientIPHeader(t *testing.T) {
+	s, _, _ := fixture(t, Options{RateRPS: 1, RateBurst: 1, ClientIPHeader: "X-Real-Ip"})
+	for i, ip := range []string{"203.0.113.1", "203.0.113.2", "203.0.113.1"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		req.RemoteAddr = "10.0.0.1:1" // the platform proxy
+		req.Header.Set("X-Real-Ip", ip)
+		req.Header.Set("CF-Connecting-IP", "198.51.100.9") // not the configured header: ignored
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, req)
+		if want := []int{200, 200, 429}[i]; rec.Code != want {
+			t.Fatalf("request %d: %d, want %d", i, rec.Code, want)
+		}
 	}
 }

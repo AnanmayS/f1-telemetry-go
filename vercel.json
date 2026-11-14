@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "git": { "deploymentEnabled": { "main": false } },
+  "installCommand": "cd web && npm ci",
+  "buildCommand": "cd web && npm run build",
+  "outputDirectory": "web/dist",
+  "functions": {
+    "api/index.go": {
+      "includeFiles": "{data/**,api/data/**}",
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "DENY" }
+      ]
+    }
+  ]
+}
