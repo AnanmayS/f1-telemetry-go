@@ -23,4 +23,6 @@ COPY --from=web /src/web/dist /srv/web
 VOLUME /data
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/server"]
-CMD ["-addr", ":8080", "-data", "/data", "-static", "/srv/web", "-trust-proxy"]
+# -trust-proxy is not a default: it is only safe when every request arrives
+# through Cloudflare. deploy/docker-compose.yml adds it.
+CMD ["-addr", ":8080", "-data", "/data", "-static", "/srv/web"]

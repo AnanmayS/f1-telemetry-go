@@ -56,7 +56,11 @@ class Side {
     const edit = (want: () => Want | undefined) => () => {
       const prev = this.sessionKey;
       const w = want();
-      if (w) this.load(w).then((ok) => ok && this.onEdit(prev), this.onError);
+      if (!w) return;
+      const p = this.load(w);
+      const mine = this.seq;
+      // An error from a load that a newer edit has replaced must not cover the newer result.
+      p.then((ok) => ok && this.onEdit(prev), (e) => mine === this.seq && this.onError(e));
     };
     this.year.onchange = edit(() => this.pickSession((s) => s.year === Number(this.year.value)));
     this.meeting.onchange = edit(() => this.pickSession((s) => s.meeting_key === Number(this.meeting.value)));
@@ -207,12 +211,13 @@ export function createPicker(
   return {
     selection,
     async init(ra, rb) {
-      const start =
-        sessions.find((s) => s.session_key === ra?.session) ??
-        sessions.find((s) => s.session_type === 'Qualifying') ??
-        sessions[0]!;
-      await a.load({ ...ra, session: start.session_key });
-      await b.load(rb ?? { session: a.sessionKey! });
+      // A link to a session we do not have falls back to the defaults as a
+      // whole: keeping its driver and lap would show some other comparison.
+      const known = (r: typeof ra) => (r && sessions.some((s) => s.session_key === r.session) ? r : undefined);
+      const wa = known(ra);
+      const start = sessions.find((s) => s.session_type === 'Qualifying') ?? sessions[0]!;
+      await a.load(wa ?? { session: start.session_key });
+      await b.load(known(rb) ?? { session: a.sessionKey! });
       form.hidden = false;
       onChange(selection());
     },

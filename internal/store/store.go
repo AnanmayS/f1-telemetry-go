@@ -39,6 +39,10 @@ type Store struct {
 	// live holds in-memory segments of sessions still being ingested. They are
 	// served like any other segment until the session is sealed into the manifest.
 	live map[int]*openSegment
+	// retry is set when a manifest entry's file could not be opened;
+	// failedFiles remembers which, so each failure is logged once.
+	retry       bool
+	failedFiles map[string]string
 
 	cache  *lru.Cache[lapKey, *model.LapData]
 	flight flight
@@ -99,7 +103,7 @@ func (s *Store) Reload() (bool, error) {
 		return false, err
 	}
 	old := s.snap.Load()
-	if man.Version == old.version {
+	if man.Version == old.version && !s.retry {
 		return false, nil
 	}
 	next := &snapshot{version: man.Version, segs: make(map[int]*openSegment, len(man.Segments))}
@@ -119,30 +123,49 @@ func (s *Store) Reload() (bool, error) {
 			err = fmt.Errorf("file holds session %d", seg.SessionKey)
 		}
 		if err != nil {
-			s.log.Error("segment unavailable", "session", e.SessionKey, "file", e.File, "err", err)
+			// Log a file's failure once, not on every retry.
+			if s.failedFiles[e.File] == "" {
+				s.log.Error("segment unavailable", "session", e.SessionKey, "file", e.File, "err", err)
+			}
+			if s.failedFiles == nil {
+				s.failedFiles = map[string]string{}
+			}
+			s.failedFiles[e.File] = err.Error()
 			failed = true
 			if cur, ok := old.segs[e.SessionKey]; ok {
-				next.segs[e.SessionKey] = cur // keep serving the previous build
+				next.segs[e.SessionKey] = cur // keep serving the previous build (or the live segment)
 			}
 			continue
 		}
+		delete(s.failedFiles, e.File)
 		next.segs[e.SessionKey] = &openSegment{entry: e, seg: seg}
 	}
 	for key, o := range s.live {
-		if _, sealed := next.segs[key]; sealed {
-			delete(s.live, key) // sealed: the file replaces the in-memory segment (released below)
-		} else {
+		switch cur, ok := next.segs[key]; {
+		case !ok:
 			next.segs[key] = o
+		case cur != o:
+			delete(s.live, key) // sealed: the file replaces the in-memory segment (released by publish)
 		}
 	}
-	if failed {
-		// Keep the old version so the next Reload tries the failed files again
-		// (the cause may be transient, such as running out of file descriptors).
-		next.version = old.version
+	// A file that failed to open is tried again on the next Reload even if the
+	// manifest has not changed (the cause may be transient, such as running
+	// out of file descriptors).
+	s.retry = failed
+	changed := len(next.segs) != len(old.segs)
+	for k, o := range next.segs {
+		if old.segs[k] != o {
+			changed = true
+		}
+	}
+	if !changed && next.version == old.version {
+		return false, nil // a retry that got nowhere: nothing to publish
 	}
 	s.publish(next, old)
-	s.log.Info("manifest loaded", "version", man.Version, "segments", len(next.segs))
-	return true, nil
+	if changed {
+		s.log.Info("manifest loaded", "version", man.Version, "segments", len(next.segs))
+	}
+	return changed, nil
 }
 
 // publish finishes next (listings, revision), swaps it in and releases the

@@ -179,6 +179,7 @@ async function load(sel: Selection | null): Promise<void> {
     current = d;
     render(d);
   } catch (e) {
+    if (ctl.signal.aborted) return; // superseded by a newer selection; its result decides what is shown
     fail(e);
   }
 }

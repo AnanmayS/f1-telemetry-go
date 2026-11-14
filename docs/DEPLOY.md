@@ -22,7 +22,7 @@ echo "TUNNEL_TOKEN=<token from the Cloudflare dashboard>" > .env
 docker compose up -d --build
 ```
 
-`deploy/docker-compose.yml` runs the server bound to `127.0.0.1:8080` (read-only filesystem, no capabilities, non-root) and a Cloudflare Tunnel that provides HTTPS without opening any inbound port. Point the tunnel's public hostname at `http://ghostlap:8080`.
+`deploy/docker-compose.yml` runs the server bound to `127.0.0.1:8080` (read-only filesystem and data mount, no capabilities, non-root, `-trust-proxy` on) and a Cloudflare Tunnel that provides HTTPS without opening any inbound port. Point the tunnel's public hostname at `http://ghostlap:8080`.
 
 Without Docker: `go build -o server ./cmd/server && ./server -data data -static web/dist -trust-proxy` after `cd web && npm ci && npm run build`.
 

@@ -5,8 +5,9 @@ services:
   ghostlap:
     build: ..
     restart: unless-stopped
+    command: ["-addr", ":8080", "-data", "/data", "-static", "/srv/web", "-trust-proxy"]
     volumes:
-      - ../data:/data
+      - ../data:/data:ro
     ports:
       - "127.0.0.1:8080:8080"
     read_only: true
@@ -15,7 +16,7 @@ services:
     mem_limit: 1g
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2025.11.1  # pin; bump deliberately
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:

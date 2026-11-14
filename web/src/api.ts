@@ -89,8 +89,12 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   let body: unknown = null;
   try {
     body = await res.json();
-  } catch {
-    // fall through: handled below
+  } catch (e) {
+    // An abort while the body is still streaming is a cancellation, not a bad response.
+    if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+    // otherwise fall through: handled below
   }
   if (!res.ok) {
     const err = (body ?? {}) as { error?: string; code?: string };

@@ -427,3 +427,71 @@ func TestFlightSurvivesPanic(t *testing.T) {
 		t.Fatal("a panic left the key locked: later requests for the lap hang")
 	}
 }
+
+// A file that stays unreadable is retried quietly: no republish, no
+// "changed" result, and the manifest version is still reported.
+func TestPermanentlyBadSegmentDoesNotChurn(t *testing.T) {
+	dir := t.TempDir()
+	writeSession(t, dir, 10, 2024, 100)
+	e := writeSession(t, dir, 11, 2024, 100)
+	os.Truncate(filepath.Join(dir, SegmentDir, e.File), 50)
+	s, err := Open(dir, 0, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	man, _ := LoadManifest(dir)
+	if s.Version() != man.Version {
+		t.Fatalf("version = %d, manifest is %d", s.Version(), man.Version)
+	}
+	rev := s.Rev()
+	for i := 0; i < 3; i++ {
+		if changed, err := s.Reload(); err != nil || changed {
+			t.Fatalf("reload %d: changed=%v err=%v", i, changed, err)
+		}
+	}
+	if s.Rev() != rev || s.Stats().Segments != 1 {
+		t.Fatal("snapshot was republished")
+	}
+}
+
+// If the sealed file of a live session cannot be opened, the in-memory
+// segment keeps being served and stays under live management.
+func TestLiveSegmentSurvivesUnreadableSealedFile(t *testing.T) {
+	dir := t.TempDir()
+	writeSession(t, dir, 10, 2024, 100)
+	s, err := Open(dir, 0, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	meta := segment.Meta{Session: model.Session{Key: 50, Year: 2024}}
+	data, _ := segment.Build(meta, []*model.LapData{mkLap(1, 1, 10, 90_000, 1)})
+	liveSeg, _ := segment.Parse(data)
+	s.SetLive(liveSeg, "live-50-1")
+
+	e := writeSession(t, dir, 50, 2024, 100) // "sealed", but the file is damaged
+	path := filepath.Join(dir, SegmentDir, e.File)
+	good, _ := os.ReadFile(path)
+	os.WriteFile(path, good[:60], 0o644)
+	s.Reload()
+	sess, err := s.Acquire(50)
+	if err != nil || sess.Gen != "live-50-1" {
+		t.Fatalf("live segment not served while the sealed file is unreadable: gen=%q err=%v", sess.Gen, err)
+	}
+	sess.Release()
+
+	os.WriteFile(path, good, 0o644)
+	if changed, _ := s.Reload(); !changed {
+		t.Fatal("readable sealed file not picked up")
+	}
+	sess, _ = s.Acquire(50)
+	defer sess.Release()
+	if sess.Gen != e.SHA256 {
+		t.Fatalf("still serving %q after the sealed file became readable", sess.Gen)
+	}
+	s.ClearLive(50) // already handed over; must be a harmless no-op
+	if _, err := s.Acquire(50); err != nil {
+		t.Fatal("ClearLive removed the sealed session")
+	}
+}
