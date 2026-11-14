@@ -33,7 +33,11 @@ type Options struct {
 	StaticDir  string  // built frontend; "" disables static serving
 	RateRPS    float64 // per-IP requests per second; 0 disables the limit
 	RateBurst  int
-	TrustProxy bool // take the client address from CF-Connecting-IP
+	TrustProxy bool // take the client address from CF-Connecting-IP (behind Cloudflare)
+	// ClientIPHeader names the header a trusted platform proxy sets to the
+	// client address (Vercel: "X-Real-Ip"). It overrides TrustProxy. Set it
+	// only when clients cannot reach the server except through that proxy.
+	ClientIPHeader string
 	// RespCacheBytes bounds the cache of finished, gzip-compressed lap and
 	// compare responses (0 = 64 MiB, negative = disabled).
 	RespCacheBytes int64
@@ -69,10 +73,14 @@ func New(o Options) *Server {
 		o.Log = slog.Default()
 	}
 	s := &Server{store: o.Store, log: o.Log, mux: http.NewServeMux(), static: o.StaticDir, visits: newVisitCounter()}
+	ipHeader := o.ClientIPHeader
+	if ipHeader == "" && o.TrustProxy {
+		ipHeader = "CF-Connecting-IP"
+	}
 	if o.RateRPS > 0 {
-		s.limiter = newIPLimiter(o.RateRPS, max(o.RateBurst, 1), o.TrustProxy)
+		s.limiter = newIPLimiter(o.RateRPS, max(o.RateBurst, 1), ipHeader)
 	} else {
-		s.limiter = &ipLimiter{trustProxy: o.TrustProxy}
+		s.limiter = &ipLimiter{ipHeader: ipHeader}
 	}
 	switch {
 	case o.RespCacheBytes == 0:

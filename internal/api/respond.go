@@ -17,11 +17,11 @@ import (
 // ETag changes when a session is rebuilt, so a week is safe; listings grow
 // as sessions are ingested.
 const (
-	cacheData = "public, max-age=604800, stale-while-revalidate=86400"
-	cacheList = "public, max-age=300"
+	cacheData = "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400"
+	cacheList = "public, max-age=300, s-maxage=300"
 	// cacheLive is for sessions still being ingested: their laps change every
 	// second or so, so clients must come back.
-	cacheLive = "public, max-age=2"
+	cacheLive = "public, max-age=2, s-maxage=2"
 	cacheNone = "no-store"
 )
 

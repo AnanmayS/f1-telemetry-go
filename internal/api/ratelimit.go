@@ -15,11 +15,11 @@ const limiterShards = 32
 // ipLimiter is a per-client token bucket. Buckets live in shards so the
 // request path never takes a server-wide lock.
 type ipLimiter struct {
-	rps        rate.Limit
-	burst      int
-	trustProxy bool
-	seed       maphash.Seed
-	shards     [limiterShards]limiterShard
+	rps      rate.Limit
+	burst    int
+	ipHeader string // header carrying the client address when behind a trusted proxy; "" = use the peer address
+	seed     maphash.Seed
+	shards   [limiterShards]limiterShard
 }
 
 type limiterShard struct {
@@ -32,8 +32,8 @@ type bucket struct {
 	seen time.Time
 }
 
-func newIPLimiter(rps float64, burst int, trustProxy bool) *ipLimiter {
-	l := &ipLimiter{rps: rate.Limit(rps), burst: burst, trustProxy: trustProxy, seed: maphash.MakeSeed()}
+func newIPLimiter(rps float64, burst int, ipHeader string) *ipLimiter {
+	l := &ipLimiter{rps: rate.Limit(rps), burst: burst, ipHeader: ipHeader, seed: maphash.MakeSeed()}
 	for i := range l.shards {
 		l.shards[i].buckets = map[string]*bucket{}
 	}
@@ -43,8 +43,8 @@ func newIPLimiter(rps float64, burst int, trustProxy bool) *ipLimiter {
 // clientIP is the peer address, or the CDN-reported client address when the
 // server is told it sits behind a trusted proxy.
 func (l *ipLimiter) clientIP(r *http.Request) string {
-	if l.trustProxy {
-		if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+	if l.ipHeader != "" {
+		if ip := r.Header.Get(l.ipHeader); ip != "" {
 			return ip
 		}
 	}
