@@ -1,0 +1,21 @@
+{
+  "name": "ghostlap-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "npm run build && playwright test",
+    "shots": "npm run build && playwright test -c playwright.shots.config.ts"
+  },
+  "dependencies": {
+    "uplot": "^1.6.32"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}

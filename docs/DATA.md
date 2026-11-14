@@ -47,6 +47,8 @@ Published on openf1.org: free tier **3 requests/second and 30 requests/minute**.
 
 The PRD default of 2 requests/second exceeds the per-minute cap. Ingest defaults are **1 request per 2.1 s (about 28.5/minute), burst 1, 2 in flight**. At about 43 requests per session and about 470 sessions, a cold full ingest is roughly 20,000 requests, or about 11–12 hours.
 
+**Response size limit (found during ingest, not documented by OpenF1):** `car_data` and `location` for one driver over a very long session (the 9-hour pre-season testing days) return HTTP 422 "You're likely asking for too much data at once". Ingest then splits the query into time windows with `date>=...&date<...`, halving until each piece is accepted, joins the rows and caches the joined result.
+
 Historical queries are refused for unauthenticated clients while a session is live (from 30 minutes before to 30 minutes after). Ingest treats that as retryable-later and exits cleanly; rerun after the session.
 
 ## Terms
