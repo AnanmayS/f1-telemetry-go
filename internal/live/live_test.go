@@ -476,3 +476,42 @@ func TestCrashRecovery(t *testing.T) {
 	}
 	t.Logf("%d events, %d SIGKILLs, %d torn WAL tails truncated on restart; sealed segment equals the batch build", total, kills, tornTails)
 }
+
+// A crash after the manifest was saved but before the WAL was removed (or
+// before the process could say so) leaves a sealed session and maybe a stale
+// WAL. The next run must finish cleanly and must not report a WAL position:
+// CI caught the crash test reading "RECOVERED 0" here as lost data.
+func TestRestartAfterSealIsANoOp(t *testing.T) {
+	dir := t.TempDir()
+	seedRawCache(t, dir)
+	raw := loadRaw(t, dir)
+	liveDir := filepath.Join(dir, "live")
+	if err := (&Runner{DataDir: dir, LiveDir: liveDir, Log: quiet}).Replay(context.Background(), raw, 0); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := store.LoadManifest(dir)
+	// Recreate the leftover WAL of a crash between "manifest saved" and "WAL removed".
+	s, err := Open(liveDir, raw.Meta, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Apply(Events(raw)[0])
+	s.Close()
+
+	called := false
+	r := &Runner{DataDir: dir, LiveDir: liveDir, Log: quiet, OnRecovered: func(uint64) { called = true }, OnDurable: func(uint64) { called = true }}
+	if err := r.Replay(context.Background(), raw, 0); err != nil {
+		t.Fatal(err)
+	}
+	if called {
+		t.Error("a sealed session reported a WAL position")
+	}
+	if _, err := os.Stat(WALPath(liveDir, testSession)); !os.IsNotExist(err) {
+		t.Error("stale WAL not removed")
+	}
+	after, _ := store.LoadManifest(dir)
+	if after.Version != before.Version {
+		t.Error("manifest rewritten for an already sealed session")
+	}
+	sameLaps(t, sealedSegment(t, dir), batchSegment(t, raw))
+}

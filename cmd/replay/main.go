@@ -5,7 +5,8 @@
 //
 // It prints one line per state change on stdout:
 //
-//	RECOVERED <seq>   last event found in the WAL at startup
+//	RECOVERED <seq>   last event found in the WAL at startup (absent if the
+//	                  session was already sealed by an earlier run)
 //	ACK <seq>         every event up to seq is on disk
 //	SEALED            the session was written as a segment
 package main

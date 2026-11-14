@@ -106,7 +106,8 @@ type Runner struct {
 	Refresh   time.Duration // how often queries see new data (default 1s)
 	Log       *slog.Logger
 
-	// OnRecovered is called once with the last sequence found in the WAL.
+	// OnRecovered is called once with the last sequence found in the WAL. It
+	// is not called when the session turns out to be sealed already.
 	OnRecovered func(lastSeq uint64)
 	// OnDurable is called as the durable sequence advances. Only events at or
 	// below it may be acknowledged to the source.
@@ -130,9 +131,8 @@ func (r *Runner) Replay(ctx context.Context, raw *ingest.Raw, speed float64) err
 		if err := os.Remove(WALPath(r.LiveDir, key)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-		if r.OnRecovered != nil {
-			r.OnRecovered(0)
-		}
+		// OnRecovered is not called: there is no WAL position to report, and
+		// reporting 0 would read as "everything acknowledged was lost".
 		return nil
 	}
 	sess, err := Open(r.LiveDir, raw.Meta, r.SyncEvery)
