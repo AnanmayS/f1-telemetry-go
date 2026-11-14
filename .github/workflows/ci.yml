@@ -21,7 +21,7 @@ jobs:
       - name: staticcheck
         run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
       - name: tests (race)
-        run: go test -race ./...
+        run: go test -race ./...   # includes the SIGKILL crash test
       - name: fuzz smoke
         run: |
           for t in FuzzDecodeDelta FuzzDecodeDoD FuzzDecodeRLE FuzzDecodeBoolRLE FuzzDecodeBlock; do
@@ -29,6 +29,7 @@ jobs:
           done
           go test ./internal/segment -run '^$' -fuzz '^FuzzParse$' -fuzztime 10s
           go test ./internal/wal -run '^$' -fuzz '^FuzzReplay$' -fuzztime 10s
+          go test ./internal/live -run '^$' -fuzz '^FuzzDecodeEvent$' -fuzztime 10s
 
   web:
     runs-on: ubuntu-latest

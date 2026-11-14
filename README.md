@@ -74,7 +74,7 @@ bench/report.sh                                           # regenerate docs/BENC
 
 ```bash
 go test -race ./...                                  # unit, property, integration, crash test
-go test ./internal/encoding -fuzz FuzzDecodeBlock    # one of seven fuzz targets
+go test ./internal/encoding -fuzz FuzzDecodeBlock    # one of eight fuzz targets
 go test ./internal/ingest -run Golden -v             # against official timing; needs ingested sessions
 cd web && npm test                                   # Playwright smoke tests
 ```
