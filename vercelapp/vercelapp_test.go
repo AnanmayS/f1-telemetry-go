@@ -1,6 +1,8 @@
 package vercelapp
 
 import (
+	"io"
+	"log/slog"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -31,5 +33,19 @@ func TestHandlerWithoutData(t *testing.T) {
 	Handler(rec, httptest.NewRequest("GET", "/api/seasons", nil))
 	if !strings.Contains(rec.Body.String(), `"code":"unavailable"`) || rec.Header().Get("Cache-Control") != "no-store" {
 		t.Errorf("unavailable response: %s %v", rec.Body, rec.Header())
+	}
+}
+
+func TestFindData(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "MANIFEST"), []byte("{}"), 0o644)
+	t.Setenv("GHOSTLAP_DATA", dir)
+	if got := findData(slog.New(slog.NewTextHandler(io.Discard, nil))); got != dir {
+		t.Fatalf("findData = %q, want %q", got, dir)
+	}
+	t.Setenv("GHOSTLAP_DATA", filepath.Join(dir, "nope"))
+	t.Chdir(t.TempDir()) // no ./data here
+	if got := findData(slog.New(slog.NewTextHandler(io.Discard, nil))); got != "" {
+		t.Fatalf("findData found %q where there is no bundle", got)
 	}
 }

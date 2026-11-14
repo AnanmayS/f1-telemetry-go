@@ -10,9 +10,11 @@ package vercelapp
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -38,12 +40,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 func setup() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	dir := os.Getenv("GHOSTLAP_DATA")
-	if dir == "" {
-		dir = "data" // bundled next to the function by includeFiles
+	dir := findData(log)
+	var st *store.Store
+	err := errors.New("no MANIFEST found in any candidate directory")
+	if dir != "" {
+		st, err = store.Open(dir, 128<<20, log)
 	}
-	st, err := store.Open(dir, 128<<20, log)
 	if err != nil {
+		// A function without its data bundle is a broken deployment: say so
+		// instead of serving an empty catalogue.
 		log.Error("cannot open store", "dir", dir, "err", err)
 		app = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -53,6 +58,7 @@ func setup() {
 		})
 		return
 	}
+	log.Info("store open", "dir", dir, "segments", st.Stats().Segments)
 	app = api.New(api.Options{
 		Store: st, Log: log,
 		RateRPS: 20, RateBurst: 120,
@@ -60,4 +66,33 @@ func setup() {
 		ClientIPHeader: "X-Real-Ip",
 		RespCacheBytes: 32 << 20,
 	})
+}
+
+// findData returns the first directory that holds a MANIFEST. Where the
+// platform unpacks included files relative to the running binary is not
+// something to rely on, so several places are tried.
+func findData(log *slog.Logger) string {
+	cwd, _ := os.Getwd()
+	exe, _ := os.Executable()
+	candidates := []string{os.Getenv("GHOSTLAP_DATA"), "data", filepath.Join(filepath.Dir(exe), "data"),
+		"/var/task/data", filepath.Join(cwd, "..", "data"), os.Getenv("LAMBDA_TASK_ROOT") + "/data"}
+	for _, c := range candidates {
+		if c == "" || c == "/data" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(c, store.ManifestName)); err == nil {
+			return c
+		}
+	}
+	// Leave enough in the log to see where the files actually went.
+	var seen []string
+	for _, d := range []string{cwd, filepath.Dir(exe), "/var/task"} {
+		if entries, err := os.ReadDir(d); err == nil {
+			for _, e := range entries {
+				seen = append(seen, filepath.Join(d, e.Name()))
+			}
+		}
+	}
+	log.Error("data bundle not found", "cwd", cwd, "exe", exe, "tried", candidates, "listing", seen)
+	return ""
 }
