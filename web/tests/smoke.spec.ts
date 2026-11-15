@@ -34,17 +34,16 @@ test('share link renders, hover fills the readout, copied link reopens the same 
   await expect(page.locator('#gap')).toHaveText('+0.292 s');
   expect(new URL(page.url()).search).toBe('?a=9492:1:fastest&b=9492:4:fastest');
 
-  // Track map is drawn.
-  const mapPainted = await page.locator('#map').evaluate((c) => {
-    const cv = c as HTMLCanvasElement;
-    return cv.getContext('2d')!.getImageData(0, 0, cv.width, cv.height).data.some((v) => v !== 0);
-  });
-  expect(mapPainted).toBe(true);
+  // Track map is drawn (its sections are covered in sections.spec.ts).
+  await expect(page.locator('#map .track-base')).toHaveCount(1);
+  // The selects are folded away until asked for.
+  await expect(page.locator('#picker')).toBeHidden();
 
   // Hover: the readout shows both drivers' values and the delta at that distance.
   const readout = page.locator('#readout');
   await expect(readout).not.toContainText('km/h');
   const over = page.locator('#charts .u-over').nth(1);
+  await over.scrollIntoViewIfNeeded(); // the charts sit below the track overview now
   const box = (await over.boundingBox())!;
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2);
   const cells = readout.locator('.cell');
@@ -84,6 +83,11 @@ test('changing the picker updates the URL; explicit laps and other sessions surv
   await page.goto(SHARE);
   await expectCharts(page);
 
+  // The picker opens from the summary.
+  await page.locator('#change').click();
+  await expect(page.locator('#picker')).toBeVisible();
+  await expect(page.locator('#change')).toHaveAttribute('aria-expanded', 'true');
+
   // B from the 2023 qualifying at the same circuit, on a specific (non-fastest) lap.
   await page.locator('#b-year').selectOption('2023');
   await expect(page).toHaveURL(/b=9169:\d+:fastest$/);
@@ -101,6 +105,11 @@ test('changing the picker updates the URL; explicit laps and other sessions surv
   await expectCharts(page);
   expect(page.url()).toBe(url);
   expect(await summaryText(page)).toBe(before);
+
+  // "Change laps" toggles: a second click folds the picker away again.
+  await page.locator('#change').click();
+  await page.locator('#change').click();
+  await expect(page.locator('#picker')).toBeHidden();
 });
 
 test('no selection in the URL falls back to a default comparison', async ({ page }) => {

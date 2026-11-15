@@ -2,9 +2,14 @@
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import type { Compare, Series } from './api';
+import { near } from './sections';
 import { cssVar, el, type Colours } from './state';
 
 export interface Charts {
+  /** Zooms every chart to an index range (with a little padding), or back to the whole lap. */
+  setView(range: { i0: number; i1: number } | null): void;
+  /** Moves the shared crosshair to a sample, e.g. from the track map. Null hides it. */
+  setCursor(idx: number | null): void;
   destroy(): void;
 }
 
@@ -28,11 +33,16 @@ const stepped = uPlot.paths.stepped!({ align: 1 });
 
 const lane = (s: Series, base: number): Series => s.map((v) => (v == null ? null : base + (v >= 0.5 ? 0.8 : 0)));
 
+const deltaUnit = (labelA: string, labelB: string, rebased: boolean): string =>
+  rebased
+    ? `s · re-based to 0 at the section start · rising: ${labelB} is losing time to ${labelA}`
+    : `s · above zero: ${labelB} is behind ${labelA}`;
+
 function specs(d: Compare, labelA: string, labelB: string): Spec[] {
   const ch = d.channels;
   const laneTicks = (v: number): string => (v > 1 ? labelA : labelB);
   return [
-    { title: 'Delta', unit: `s · above zero: ${labelB} is behind ${labelA}`, height: 150, data: [d.delta] },
+    { title: 'Delta', unit: deltaUnit(labelA, labelB, false), height: 150, data: [d.delta] },
     { title: 'Speed', unit: 'km/h', height: 200, data: [ch.speed.a, ch.speed.b] },
     { title: 'Throttle', unit: '%', height: 110, data: [ch.throttle.a, ch.throttle.b], range: [-4, 104], splits: [0, 50, 100] },
     { title: 'Brake', unit: 'on / off', height: 64, data: [lane(ch.brake.a, 1.1), lane(ch.brake.b, 0.1)], range: [0, 2], lanes: true, stepped: true, splits: [0.5, 1.5], ticks: laneTicks },
@@ -56,6 +66,10 @@ export function renderCharts(
   const plots: uPlot[] = [];
   let syncing = false;
   let lastIdx = -1;
+  let view: { i0: number; i1: number } | null = null;
+  let deltaNote: HTMLElement | null = null;
+  const dist = d.distance;
+  const full = { min: dist[0] ?? 0, max: dist[dist.length - 1] ?? 1 };
 
   const hover = (u: uPlot): void => {
     const i = u.cursor.idx;
@@ -63,7 +77,13 @@ export function renderCharts(
   };
   const syncZoom = (u: uPlot, key: string): void => {
     const { min, max } = u.scales.x!;
-    if (key !== 'x' || syncing || min == null || max == null) return;
+    if (key !== 'x' || min == null || max == null) return;
+    if (u === plots[0]) {
+      // Lets tests (and anyone curious) read the visible distance range.
+      root.dataset.xMin = min.toFixed(1);
+      root.dataset.xMax = max.toFixed(1);
+    }
+    if (syncing) return;
     syncing = true;
     for (const o of plots) if (o !== u) o.setScale('x', { min, max });
     syncing = false;
@@ -82,6 +102,25 @@ export function renderCharts(
     ctx.restore();
   };
 
+  /** Dashed markers at the edges of the selected section. */
+  const bounds = (u: uPlot): void => {
+    if (!view) return;
+    const { ctx, bbox } = u;
+    ctx.save();
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = devicePixelRatio;
+    ctx.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]);
+    for (const i of [view.i0, view.i1]) {
+      const x = Math.round(u.valToPos(dist[i]!, 'x', true)) + 0.5;
+      if (x < bbox.left || x > bbox.left + bbox.width) continue;
+      ctx.beginPath();
+      ctx.moveTo(x, bbox.top);
+      ctx.lineTo(x, bbox.top + bbox.height);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
   root.replaceChildren();
   const width = (): number => Math.max(280, root.clientWidth);
   const list = specs(d, labels.a, labels.b);
@@ -90,9 +129,9 @@ export function renderCharts(
     const last = i === list.length - 1;
     const isDelta = i === 0;
     const holder = el('div', { class: 'plot' });
-    root.append(
-      el('section', { class: 'chart' }, el('h2', {}, s.title, ' ', el('small', {}, s.unit)), holder),
-    );
+    const note = el('small', {}, s.unit);
+    if (isDelta) deltaNote = note;
+    root.append(el('section', { class: 'chart' }, el('h2', {}, s.title, ' ', note), holder));
 
     const line = (stroke: string, k: number): uPlot.Series => ({
       stroke,
@@ -107,7 +146,7 @@ export function renderCharts(
     const opts: uPlot.Options = {
       width: width(),
       height: s.height + (last ? 26 : 0),
-      padding: [6, 10, last ? 0 : 7, 0],
+      padding: [6, 18, last ? 0 : 7, 0],
       legend: { show: false },
       cursor: {
         y: false,
@@ -150,7 +189,7 @@ export function renderCharts(
       hooks: {
         setCursor: [hover],
         setScale: [syncZoom],
-        ...(isDelta ? { draw: [zeroLine] } : {}),
+        draw: isDelta ? [zeroLine, bounds] : [bounds],
       },
     };
     const u = new uPlot(opts, [d.distance, ...s.data] as uPlot.AlignedData, holder);
@@ -175,6 +214,33 @@ export function renderCharts(
   ro.observe(root);
 
   return {
+    setView(range) {
+      view = range;
+      const first = plots[0];
+      if (!first) return;
+      let { min, max } = full;
+      let delta = d.delta;
+      if (range) {
+        const [lo, hi] = [dist[range.i0]!, dist[range.i1]!];
+        const pad = Math.max(20, (hi - lo) * 0.06);
+        min = Math.max(full.min, lo - pad);
+        max = Math.min(full.max, hi + pad);
+        const base = near(d.delta, range.i0) ?? 0;
+        delta = d.delta.map((v) => (v == null ? null : v - base));
+      }
+      if (deltaNote) deltaNote.textContent = deltaUnit(labels.a, labels.b, range !== null);
+      first.setData([dist, delta] as uPlot.AlignedData, false);
+      // The zoom hook copies the range to the other charts.
+      first.setScale('x', { min, max });
+      for (const p of plots) p.redraw(false);
+    },
+    setCursor(idx) {
+      for (const p of plots) {
+        const left = idx === null ? -10 : p.valToPos(dist[idx]!, 'x');
+        const inside = left >= 0 && left <= p.over.clientWidth;
+        p.setCursor({ left: inside ? left : -10, top: inside ? p.over.clientHeight / 2 : -10 }, true);
+      }
+    },
     destroy() {
       ro.disconnect();
       for (const p of plots) p.destroy();

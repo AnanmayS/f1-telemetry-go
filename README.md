@@ -1,6 +1,6 @@
 # ghostlap
 
-Pick any two Formula 1 laps from 2023 onward and see them overlaid by distance: speed, throttle, brake, gear, RPM, DRS and a running time delta. Every comparison is a link.
+Pick any two Formula 1 laps from 2023 onward and see where on the track one beats the other. The circuit is drawn in sections coloured by the faster driver; pick a section to see time gained, entry, minimum and exit speeds, and the speed, throttle, brake, gear, RPM and DRS traces for that stretch. Every comparison, down to the section, is a link.
 
 Underneath is a time-series storage engine written in Go for this one kind of data: column-oriented, compressed, CRC-protected segment files, an mmap reader, a concurrent HTTP API, and a write-ahead log for live sessions.
 
@@ -15,7 +15,7 @@ Underneath is a time-series storage engine written in Go for this one kind of da
 | M0 data spike | Done. Findings in [docs/DATA.md](docs/DATA.md). |
 | M1 ingest + storage engine | Done. Full-corpus ingest takes about 12 hours at OpenF1's rate limit; see [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for how much was ingested when the numbers were taken. |
 | M2 query API | Done. [docs/API.md](docs/API.md). |
-| M3 web UI | Done. Tested in Chromium (desktop and phone viewports); Safari and Firefox not yet checked. |
+| M3 web UI | Done, then rebuilt around a sectioned track map. 21 Playwright tests; tested in Chromium (desktop and phone viewports); Safari and Firefox not yet checked. |
 | M4 launch | Hosted on Vercel at https://ghostlap-six.vercel.app with a bundle of the newest sessions (a Vercel Function is capped at 250 MB, so not the full corpus). Image, CI and guide for the VPS path are in [docs/DEPLOY.md](docs/DEPLOY.md); that path is not deployed. |
 | M5 live ingest | WAL, memtable, seal and crash test done, driven by replaying recorded sessions. No live network client: OpenF1's live feed is paid. |
 

@@ -1,9 +1,16 @@
 // URL <-> selection, plus small formatting helpers shared by the views.
 import { refString, type LapRef } from './api';
+import type { Mode } from './sections';
 
 export interface Selection {
   a: LapRef;
   b: LapRef;
+}
+
+/** Which part of the lap is in view: how it is split, and the selected section (null: whole lap). */
+export interface View {
+  mode: Mode;
+  section: number | null;
 }
 
 export function parseRef(s: string | null): LapRef | null {
@@ -12,19 +19,32 @@ export function parseRef(s: string | null): LapRef | null {
   return { session: Number(m[1]), driver: Number(m[2]), lap: m[3] === 'fastest' ? 'fastest' : Number(m[3]) };
 }
 
-export function readUrl(): { a: LapRef | null; b: LapRef | null } {
+export function readUrl(): { a: LapRef | null; b: LapRef | null; view: View } {
   const q = new URLSearchParams(location.search);
-  return { a: parseRef(q.get('a')), b: parseRef(q.get('b')) };
+  const s = q.get('s');
+  return {
+    a: parseRef(q.get('a')),
+    b: parseRef(q.get('b')),
+    view: { mode: q.get('view') === 'sectors' ? 'sectors' : 'corners', section: s && /^[1-9]\d?$/.test(s) ? Number(s) : null },
+  };
 }
 
-/** Colons are legal in a query string; keep them unescaped so links stay readable. */
-export const shareQuery = (s: Selection): string => `?a=${refString(s.a)}&b=${refString(s.b)}`;
-
-export function writeUrl(s: Selection): void {
-  history.replaceState(null, '', location.pathname + shareQuery(s));
+/**
+ * Colons are legal in a query string; keep them unescaped so links stay readable.
+ * The default view (corners, whole lap) adds nothing, so plain comparison links stay short.
+ */
+export function shareQuery(s: Selection, v?: View): string {
+  let q = `?a=${refString(s.a)}&b=${refString(s.b)}`;
+  if (v && (v.mode !== 'corners' || v.section !== null)) q += `&view=${v.mode}`;
+  if (v && v.section !== null) q += `&s=${v.section}`;
+  return q;
 }
 
-export const shareUrl = (s: Selection): string => location.origin + location.pathname + shareQuery(s);
+export function writeUrl(s: Selection, v?: View): void {
+  history.replaceState(null, '', location.pathname + shareQuery(s, v));
+}
+
+export const shareUrl = (s: Selection, v?: View): string => location.origin + location.pathname + shareQuery(s, v);
 
 /** 88197 -> "1:28.197" */
 export function fmtLap(ms: number | null | undefined): string {
@@ -34,10 +54,15 @@ export function fmtLap(ms: number | null | undefined): string {
   return `${m}:${s.toFixed(3).padStart(6, '0')}`;
 }
 
-export function fmtDelta(s: number | null | undefined): string {
+export function fmtDelta(s: number | null | undefined, digits = 3): string {
   if (s == null) return '–';
-  return `${s > 0 ? '+' : s < 0 ? '−' : ''}${Math.abs(s).toFixed(3)}`;
+  const shown = Math.abs(s).toFixed(digits);
+  const zero = Number(shown) === 0;
+  return `${zero ? '' : s > 0 ? '+' : '−'}${shown}`;
 }
+
+/** 1240 -> "1,240" */
+export const fmtM = (m: number): string => Math.round(m).toLocaleString('en-US');
 
 /** Tiny DOM builder. */
 export function el<K extends keyof HTMLElementTagNameMap>(
@@ -58,6 +83,8 @@ export interface Colours {
   b: string;
   /** True when both laps share a colour, so B is drawn dashed. */
   dashB: boolean;
+  /** B's colour for filled marks (map sections, bars): a contrasting neutral when the laps share a colour. */
+  fillB: string;
 }
 
 function rgb(hex: string): [number, number, number] {
@@ -97,5 +124,6 @@ export function pickColours(a: string, b: string): Colours {
   const cb = legible(b, cssVar('--fallback-b'), bg, fg);
   const [x, y] = [rgb(ca), rgb(cb)];
   const dist = Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
-  return { a: ca, b: cb, dashB: dist < 40 };
+  const dashB = dist < 40;
+  return { a: ca, b: cb, dashB, fillB: dashB ? cssVar('--alt-b') : cb };
 }
