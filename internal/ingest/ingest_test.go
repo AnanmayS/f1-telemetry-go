@@ -98,7 +98,7 @@ func fakeAPI(t *testing.T, failCar *atomic.Bool) (*httptest.Server, *atomic.Int6
 			if t < 30_000 {
 				thr, brk = 104, 104 // stationary sentinel
 			}
-			rows = append(rows, row{"date": ts(t), "speed": 180, "rpm": 11000, "n_gear": 7, "throttle": thr, "brake": brk, "drs": 8})
+			rows = append(rows, row{"date": ts(t), "speed": 180, "rpm": 11000 + t/250%7*30, "n_gear": 7, "throttle": thr, "brake": brk, "drs": 8})
 		}
 		rows = append(rows, rows[10], rows[5]) // a duplicate and an out-of-order row
 		write(w, rows)

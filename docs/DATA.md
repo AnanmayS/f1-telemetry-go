@@ -36,6 +36,8 @@ Seasons: 2023 (118 sessions, 5 cancelled), 2024 (123, 0), 2025 (123, 0), 2026 (1
 
 OpenF1 documents the DRS mapping as a "supposed interpretation" taken from FastF1: 0, 1 off; 2, 3, 9 unknown; 8 eligible; 10, 12, 14 on.
 
+**Feed dropouts in 2026 (found while building the section view):** the 2026 `car_data` feed often repeats a moving car's speed, RPM and gear unchanged for seconds at a time (dozens of stretches of 1 s or more per driver per race; none at all in the 2023–2025 sessions checked), while `location` keeps updating. Ingest treats an unchanged run of 1 s or more on a moving car as a dropout: the repeated readings are stored as missing, and distance through the stretch is taken from the position data (units of 0.1 m) instead of the stuck speed. A lap with 3 s or more of dropout that cannot be bridged this way is not distance-normalised. On the fastest 2026 Japan qualifying lap about a third of the speed trace is missing for this reason; the charts show gaps there.
+
 **Found in the spike, not in the PRD:**
 
 - **Pit-out lap durations are measured from the previous timing-line crossing**, not from `date_start` (which is the pit exit). Lap 4 reports 1054.112 s but lap 5 starts 117 s after lap 4's `date_start`. A lap time is therefore only treated as official when the lap is not a pit-out lap and `lap_duration` agrees with the gap to the next lap's `date_start`.

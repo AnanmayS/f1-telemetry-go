@@ -10,7 +10,8 @@ import (
 // synth builds a car stream sampled every dtMs at constant speed.
 func synth(fromMs, toMs, dtMs, speed int64) (car []Car, loc []Loc) {
 	for t := fromMs; t <= toMs; t += dtMs {
-		car = append(car, Car{T: t, Speed: speed, RPM: 10000, Gear: 7, Throttle: 100, Brake: 0, DRS: 8})
+		// RPM varies sample to sample, as real telemetry does (constant readings mean a feed dropout).
+		car = append(car, Car{T: t, Speed: speed, RPM: 10000 + t/dtMs%7*30, Gear: 7, Throttle: 100, Brake: 0, DRS: 8})
 		loc = append(loc, Loc{T: t + 100, X: t, Y: -t, Z: 5})
 	}
 	return
@@ -247,5 +248,75 @@ func TestCompareStationaryAtTheLine(t *testing.T) {
 	c := Compare(a, b, 5000, 5000, 100, nil)
 	if math.Abs(c.FinalDeltaS-5) > 1e-9 {
 		t.Fatalf("final delta = %.3f, want 5.000 (official difference)", c.FinalDeltaS)
+	}
+}
+
+// A feed dropout repeats the last readings while the car keeps moving (the
+// 2026 feed does this). With position data the distance through the dropout
+// is taken from the positions and the lap stays normalised; the repeated
+// readings are stored as gaps. Without position data the lap is not trusted.
+func TestFeedDropoutIsRepairedFromPosition(t *testing.T) {
+	// 180 km/h = 50 m/s along x; position units are 0.1 m, so x = t/2.
+	mk := func(driver int, freeze, withLoc bool) []*Built {
+		var car []Car
+		var loc []Loc
+		for tm := int64(0); tm <= 110_000; tm += 250 {
+			c := Car{T: tm, Speed: 180, RPM: 10_000 + tm/250%13*40, Gear: 7, Throttle: 100, DRS: 8}
+			if freeze && tm >= 80_000 && tm < 90_000 {
+				c.Speed, c.RPM, c.Gear = 90, 11_535, 4 // stuck at half the true speed
+			}
+			car = append(car, c)
+			if withLoc {
+				loc = append(loc, Loc{T: tm, X: tm / 2, Y: 0, Z: 0})
+			}
+		}
+		return Slice(driver, []Timing{{Number: 1, StartMs: 5_000, HasStart: true, DurationMs: 100_000}}, CleanCar(car), CleanLoc(loc))
+	}
+	healthy := mk(1, false, true)
+	want := Finalize(healthy)
+	if math.Abs(want-5000) > 1 {
+		t.Fatalf("healthy lap length = %.1f m, want 5000", want)
+	}
+
+	repaired := mk(2, true, true)
+	got := Finalize(repaired)
+	d := repaired[0].Data
+	if !d.Lap.DistanceOK() || math.Abs(got-5000) > 5 {
+		t.Fatalf("repaired lap: distanceOK=%v length=%.1f m, want true and ~5000 (stuck speed alone would give 4750)", d.Lap.DistanceOK(), got)
+	}
+	// Mid-dropout (t = 85 s, 80 s into the lap) the car is 4000 m in.
+	r := Resample(d, []float64{4000 * got / 5000}, []model.Channel{model.ChSpeed, model.ChRPM, model.ChGear, model.ChThrottle})
+	if math.Abs(r.TimeS[0]-80) > 0.2 {
+		t.Errorf("time at 4000 m = %.2f s, want 80 (distance through the dropout is wrong)", r.TimeS[0])
+	}
+	for c, v := range r.Values {
+		if !math.IsNaN(v[0]) {
+			t.Errorf("%s inside the dropout = %v, want a gap", c, v[0])
+		}
+	}
+	// The first sample of the run is a real reading; only the repeats are gaps.
+	valid, ts := d.Valid[model.ChSpeed], d.Values[model.ChT]
+	for i, tm := range ts {
+		wantValid := !(tm > 80_000 && tm < 90_000)
+		if valid[i] != wantValid {
+			t.Fatalf("speed validity at t=%d is %v, want %v", tm, valid[i], wantValid)
+		}
+	}
+
+	lost := mk(3, true, false) // no position data to bridge 10 s
+	Finalize(lost)
+	if l := lost[0].Data.Lap; l.DistanceOK() || !l.ValidTime() {
+		t.Fatalf("unrepairable lap: distanceOK=%v validTime=%v, want false and true", l.DistanceOK(), l.ValidTime())
+	}
+
+	// Not dropouts: a parked car, a sub-second plateau, and changing RPM.
+	if staleRuns([]Car{{T: 0}, {T: 5000}, {T: 10_000}}) != nil {
+		t.Error("standstill flagged")
+	}
+	if staleRuns([]Car{{T: 0, Speed: 300, RPM: 11_000, Gear: 8}, {T: 400, Speed: 300, RPM: 11_000, Gear: 8}, {T: 800, Speed: 300, RPM: 11_000, Gear: 8}, {T: 1050, Speed: 301, RPM: 11_050, Gear: 8}}) != nil {
+		t.Error("short plateau flagged")
+	}
+	if healthy[0].Data.Valid[model.ChSpeed] != nil {
+		t.Error("healthy lap has gaps")
 	}
 }

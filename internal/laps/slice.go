@@ -38,6 +38,14 @@ const (
 	maxPadGapMs = 2000
 	// maxLocGapMs bounds the location gap across which x/y/z are interpolated.
 	maxLocGapMs = 2000
+	// staleMs is how long a moving car's speed, RPM and gear may all repeat
+	// exactly before the repeats are treated as a feed dropout. In 2023-2025
+	// data this never lasts even one second; the 2026 feed does it dozens of
+	// times per race while the car's position keeps updating.
+	staleMs = 1000
+	// maxUnrepairedMs is how much dropout without position data a lap may
+	// contain and still have its distance axis trusted.
+	maxUnrepairedMs = 3000
 	// startTolMs is how far lap_duration may disagree with the gap between
 	// consecutive date_start values and still count as an official lap time.
 	startTolMs = 1500
@@ -187,6 +195,10 @@ func fill(b *Built, car []Car, loc []Loc) {
 		}
 		(*v)[i] = false
 	}
+	stale := staleRuns(car)
+	isStale := func(i int) bool { return stale != nil && stale[i] }
+	var coreValid []bool // speed, rpm, gear
+	var unrepairedMs int64
 	cum := make([]float64, n) // cm from the first sample
 	for i, r := range car {
 		d.Values[model.ChT][i] = r.T
@@ -194,6 +206,11 @@ func fill(b *Built, car []Car, loc []Loc) {
 		d.Values[model.ChRPM][i] = r.RPM
 		d.Values[model.ChGear][i] = r.Gear
 		d.Values[model.ChDRS][i] = r.DRS
+		if isStale(i) {
+			// Repeated readings are not measurements: store them as gaps.
+			missing(&coreValid, i)
+			r.Throttle, r.Brake = Missing, Missing
+		}
 		if r.Throttle == Missing {
 			missing(&thrValid, i)
 		} else {
@@ -211,9 +228,26 @@ func fill(b *Built, car []Car, loc []Loc) {
 		}
 		if i > 0 {
 			// trapezoid; km/h * ms / 36 = cm
-			cum[i] = cum[i-1] + float64(car[i-1].Speed+r.Speed)/2*float64(r.T-car[i-1].T)/36
+			step := float64(car[i-1].Speed+r.Speed) / 2 * float64(r.T-car[i-1].T) / 36
+			if isStale(i) || isStale(i-1) {
+				// The speed here is a stuck value. The car's position still
+				// updates, so take the distance travelled from it instead
+				// (position units are 0.1 m).
+				okPrev := locValid == nil || locValid[i-1]
+				okCur := locValid == nil || locValid[i]
+				if okPrev && okCur {
+					dx := float64(d.Values[model.ChX][i] - d.Values[model.ChX][i-1])
+					dy := float64(d.Values[model.ChY][i] - d.Values[model.ChY][i-1])
+					dz := float64(d.Values[model.ChZ][i] - d.Values[model.ChZ][i-1])
+					step = math.Sqrt(dx*dx+dy*dy+dz*dz) * 10
+				} else {
+					unrepairedMs += r.T - car[i-1].T
+				}
+			}
+			cum[i] = cum[i-1] + step
 		}
 	}
+	d.Valid[model.ChSpeed], d.Valid[model.ChRPM], d.Valid[model.ChGear] = coreValid, coreValid, coreValid
 	d.Valid[model.ChThrottle], d.Valid[model.ChBrake] = thrValid, brkValid
 	d.Valid[model.ChX], d.Valid[model.ChY], d.Valid[model.ChZ] = locValid, locValid, locValid
 
@@ -225,11 +259,35 @@ func fill(b *Built, car []Car, loc []Loc) {
 	}
 	if d.Lap.ValidTime() {
 		end := d.Lap.StartMs + int64(d.Lap.OfficialMs)
-		// Only trust the length when telemetry actually reaches the lap end.
-		if ts[n-1] >= end-maxPadGapMs {
+		// Only trust the length when telemetry actually reaches the lap end and
+		// any dropout could be bridged with position data.
+		if ts[n-1] >= end-maxPadGapMs && unrepairedMs < maxUnrepairedMs {
 			b.RawLenCm = cumAt(ts, cum, car, end) - d0
 		}
 	}
+}
+
+// staleRuns marks samples that only repeat the previous reading during a
+// feed dropout: runs of at least staleMs in which a moving car's speed, RPM
+// and gear do not change. The first sample of a run is real and stays.
+func staleRuns(car []Car) []bool {
+	var stale []bool
+	start := 0
+	for i := 1; i <= len(car); i++ {
+		if i < len(car) && car[i].Speed == car[start].Speed && car[i].RPM == car[start].RPM && car[i].Gear == car[start].Gear {
+			continue
+		}
+		if car[start].Speed > 0 && car[i-1].T-car[start].T >= staleMs {
+			if stale == nil {
+				stale = make([]bool, len(car))
+			}
+			for k := start + 1; k < i; k++ {
+				stale[k] = true
+			}
+		}
+		start = i
+	}
+	return stale
 }
 
 // cumAt interpolates cumulative distance at time t, extrapolating at the
