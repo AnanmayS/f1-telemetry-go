@@ -28,7 +28,9 @@ const extra: Shot[] = [
   { name: 'extra-baku-light', width: 1280, height: 900, scheme: 'light', url: '/?a=9064:16:fastest&b=9064:1:fastest' },
   { name: 'extra-tablet-dark', width: 820, height: 1100, scheme: 'dark', url: SECTION },
 ];
-if (process.env.SHOTS_EXTRA) shots.push(...extra);
+// Read the environment without Node's type package, which is not a dependency.
+const shotsExtra = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.SHOTS_EXTRA;
+if (shotsExtra) shots.push(...extra);
 
 for (const s of shots) {
   test(s.name, async ({ browser }) => {
@@ -43,7 +45,7 @@ for (const s of shots) {
     const box = (await over.boundingBox())!;
     await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2);
     await page.evaluate(() => window.scrollTo(0, 0));
-    const dir = s.name.startsWith('extra-') ? (process.env.SHOTS_EXTRA ?? '.') : 'screenshots';
+    const dir = s.name.startsWith('extra-') ? (shotsExtra ?? '.') : 'screenshots';
     await page.screenshot({ path: `${dir}/${s.name}.png`, fullPage: true });
     await page.close();
   });
