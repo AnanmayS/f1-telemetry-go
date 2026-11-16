@@ -24,21 +24,21 @@ Underneath is a time-series storage engine written in Go for this one kind of da
 All from `bench/report.sh`, which regenerates [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Taken on a development laptop, not the target VPS.
 
 <!-- numbers:start -->
-Snapshot of 2026-11-14 with **18 of roughly 470 sessions ingested** (the full ingest was still running). Storage figures scale with the corpus; rerun the script when it finishes.
+Full corpus, generated 2026-11-16: every session OpenF1 has telemetry for, 2023 through the 2026 São Paulo Grand Prix.
 
 | | |
 |---|---|
-| Stored | 4,540,684 samples, 49.9 million values, 10,244 laps in 18 sessions |
-| Size | 49.56 MiB of segments from 2.42 GiB of API JSON |
-| Compression | 50.1x vs all JSON fetched; 25.8x vs the JSON of just the stored samples; 7.7x vs raw 8-byte integers |
-| Density | 11.45 bytes per sample across 11 channels, index included |
-| Decode | 330 million values/s on one core |
-| Lap lookup | p99 72 µs uncached (index search, CRC check, decode 11 blocks); p99 250 ns from the lap cache |
-| `/api/compare` under load | p99 8.3 ms at 4,000 req/s, 100% success (20 s, 80% popular / 20% random laps, cold start). p99 stayed under 50 ms up to the highest rate tried, 6,000 req/s (37 ms, 99.9% success) |
-| Same, server held to 2 CPUs | p99 24 ms at 2,000 req/s, 100% success |
-| One comparison, nothing cached but the laps | 0.92 ms of CPU (resample, JSON, gzip) |
+| Stored | 125,090,640 samples, 1.38 billion values, 266,383 laps in 464 sessions (1 more has no telemetry at the source) |
+| Size | 1.31 GiB of segments from 63.38 GiB of API JSON |
+| Compression | 48.4x vs all JSON fetched; 26.3x vs the JSON of just the stored samples; 7.8x vs raw 8-byte integers |
+| Density | 11.24 bytes per sample across 11 channels, index included |
+| Decode | 315 million values/s on one core (whole corpus in 4.4 s) |
+| Lap lookup | p50 20.5 µs, p99 838 µs uncached (index search, CRC check, decode 11 blocks); p99 667 ns from the lap cache |
+| `/api/compare` under load | p99 15 ms at 4,000 req/s, 100% success (20 s, 80% popular / 20% random laps, cold start). The laptop was running other work at load average 16 during this run, so results are uneven: p99 was 8 ms at 1,000 req/s but 583 ms at 2,000 req/s. At every rate up to 6,000 req/s at least 98.9% of requests finished within 50 ms server-side |
+| Same, server held to 2 CPUs | p99 3.9 ms at 500 req/s, 100% success; p99 95 ms at 2,000 req/s, 99.3% success (same busy machine) |
+| One comparison, nothing cached but the laps | 1.01 ms of CPU (resample, JSON, gzip) |
 | Correctness | 8 golden sessions (qualifying + race per season, 2023–2026): lap counts, lap times and fastest laps match official timing; final delta equals the official difference |
-| Live path | 697,845 events through WAL, memtable and seal in 1.6 s; 12 SIGKILLs during a replay, no acknowledged event lost, sealed file byte-identical to batch ingest |
+| Live path | 697,845 events through WAL, memtable and seal in 1.2 s; 12 SIGKILLs during a replay, no acknowledged event lost, sealed file byte-identical to batch ingest |
 <!-- numbers:end -->
 
 ## How it works
