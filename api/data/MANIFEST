@@ -1,0 +1,557 @@
+{
+ "version": 1,
+ "segments": [
+  {
+   "session_key": 11286,
+   "year": 2026,
+   "file": "11286-43140a43e25c.seg",
+   "size": 1781446,
+   "sha256": "43140a43e25cfe44e094309707815e1df09fa6817f77787873ee12d5e3977fa5",
+   "samples": 145839
+  },
+  {
+   "session_key": 11302,
+   "year": 2026,
+   "file": "11302-4b1933830cd3.seg",
+   "size": 1799350,
+   "sha256": "4b1933830cd360438a7b59eb6dfc1e055ab0c60dc75e4f3e16401f8c989873d4",
+   "samples": 161096
+  },
+  {
+   "session_key": 11303,
+   "year": 2026,
+   "file": "11303-6c4c92b266ea.seg",
+   "size": 1577356,
+   "sha256": "6c4c92b266eac1b8a9bf1a599c8aec97462119bc5df69ab8030b9fea81f134ee",
+   "samples": 145434
+  },
+  {
+   "session_key": 11307,
+   "year": 2026,
+   "file": "11307-b70220b9ac9c.seg",
+   "size": 5429539,
+   "sha256": "b70220b9ac9c2fb02b28a5d3f1487ed492370f8418be035d3b153b8fa637594d",
+   "samples": 465180
+  },
+  {
+   "session_key": 11308,
+   "year": 2026,
+   "file": "11308-5a61af7d120a.seg",
+   "size": 2114308,
+   "sha256": "5a61af7d120a2f6580bc409de097fc5032c420bb9eae9b341dcd51ee9db9a89d",
+   "samples": 182208
+  },
+  {
+   "session_key": 11309,
+   "year": 2026,
+   "file": "11309-d25eb927f9a3.seg",
+   "size": 2745515,
+   "sha256": "d25eb927f9a304cdaa540037d36182117885a9e30b894f4601dea4db601d12d2",
+   "samples": 238660
+  },
+  {
+   "session_key": 11310,
+   "year": 2026,
+   "file": "11310-c6ff8b57b47d.seg",
+   "size": 1880983,
+   "sha256": "c6ff8b57b47df35c3e0f8433b68a4c3ed17c3216c609beb4eeefed1d1e8a4bef",
+   "samples": 160304
+  },
+  {
+   "session_key": 11311,
+   "year": 2026,
+   "file": "11311-0127e17de48c.seg",
+   "size": 1325473,
+   "sha256": "0127e17de48c318e2d9fe1d69b323a402c6d5f4fb713fef62bad9e6158090400",
+   "samples": 116060
+  },
+  {
+   "session_key": 11315,
+   "year": 2026,
+   "file": "11315-227aeacc2918.seg",
+   "size": 5171572,
+   "sha256": "227aeacc2918e200f9ec771f6b72c5e81773f5617d72f3fb246d66bdbb15ab58",
+   "samples": 435355
+  },
+  {
+   "session_key": 11316,
+   "year": 2026,
+   "file": "11316-0b1d0c75f677.seg",
+   "size": 2986246,
+   "sha256": "0b1d0c75f677db79391a7129337fd17d12e279a2cfeabb42581faeaa1a15d677",
+   "samples": 257053
+  },
+  {
+   "session_key": 11317,
+   "year": 2026,
+   "file": "11317-74003028dea3.seg",
+   "size": 1141812,
+   "sha256": "74003028dea3d44b5f65e7a0838d842b24475c4dbae8959780350a09a7e83a85",
+   "samples": 98123
+  },
+  {
+   "session_key": 11321,
+   "year": 2026,
+   "file": "11321-5a82c29ea335.seg",
+   "size": 1551128,
+   "sha256": "5a82c29ea3350294395c4ec4bda38b5491a81e34024b47d45eb9d44ae9c47d56",
+   "samples": 128607
+  },
+  {
+   "session_key": 11322,
+   "year": 2026,
+   "file": "11322-e52234fc40d5.seg",
+   "size": 1603362,
+   "sha256": "e52234fc40d5161ce0f6ad5093deace10f25f97b8f5217d3a4003d31060f1fd1",
+   "samples": 140663
+  },
+  {
+   "session_key": 11326,
+   "year": 2026,
+   "file": "11326-2bb2b81467c3.seg",
+   "size": 5122939,
+   "sha256": "2bb2b81467c39236d479c2259212a37bba97464d854304197d4c5825504c21cd",
+   "samples": 435941
+  },
+  {
+   "session_key": 11327,
+   "year": 2026,
+   "file": "11327-4cba7a3e3d96.seg",
+   "size": 2805466,
+   "sha256": "4cba7a3e3d96612509639d43a5b66c2e4130cde15cd5bd41e5a3623544655300",
+   "samples": 245156
+  },
+  {
+   "session_key": 11328,
+   "year": 2026,
+   "file": "11328-859d5c5981e1.seg",
+   "size": 2928399,
+   "sha256": "859d5c5981e1c68b6afa17cfcdaa5f602299dc7c7ddde53e819bcd61892fb799",
+   "samples": 270896
+  },
+  {
+   "session_key": 11329,
+   "year": 2026,
+   "file": "11329-99f823263f8a.seg",
+   "size": 2405045,
+   "sha256": "99f823263f8a8c713229eb6ec81ef0a12983d0a8e36ecddb94dcbc61147958d2",
+   "samples": 211044
+  },
+  {
+   "session_key": 11330,
+   "year": 2026,
+   "file": "11330-dc3726f1e399.seg",
+   "size": 1634989,
+   "sha256": "dc3726f1e39917edc34d9908ac33b01f9b01b1f936680494a9bc851e945eac49",
+   "samples": 145094
+  },
+  {
+   "session_key": 11334,
+   "year": 2026,
+   "file": "11334-40d84cdc2d3d.seg",
+   "size": 4898914,
+   "sha256": "40d84cdc2d3da9c0a2936516c815363f5d0b01144a2c92cb0faf12e22d4c2c32",
+   "samples": 426373
+  },
+  {
+   "session_key": 11335,
+   "year": 2026,
+   "file": "11335-1ba5d6b39c06.seg",
+   "size": 2732824,
+   "sha256": "1ba5d6b39c06b6072cfaf4ba7701b9782339dd77b6184558e71d0188c8f756d5",
+   "samples": 239474
+  },
+  {
+   "session_key": 11336,
+   "year": 2026,
+   "file": "11336-cd37939a9fab.seg",
+   "size": 2821736,
+   "sha256": "cd37939a9fabaf25c9df01c58cce492e989d640d0a899b5794d7530b1fdab612",
+   "samples": 246874
+  },
+  {
+   "session_key": 11337,
+   "year": 2026,
+   "file": "11337-00f2e6367e6f.seg",
+   "size": 1975912,
+   "sha256": "00f2e6367e6f41eb185d3b1e73301a715c02d7cbb05381ede7a011fd85c3b1f0",
+   "samples": 174132
+  },
+  {
+   "session_key": 11338,
+   "year": 2026,
+   "file": "11338-6085506308f6.seg",
+   "size": 1334084,
+   "sha256": "6085506308f646849b67ac985f4b99e6fc83cff1f330e85b79553ebfbb119486",
+   "samples": 113609
+  },
+  {
+   "session_key": 11342,
+   "year": 2026,
+   "file": "11342-85d6124b3c4d.seg",
+   "size": 5768527,
+   "sha256": "85d6124b3c4d2c3102ed8d09274575eacdfc952f9df58bd8b9beb56fe685112d",
+   "samples": 493501
+  },
+  {
+   "session_key": 11343,
+   "year": 2026,
+   "file": "11343-a44d9c06f854.seg",
+   "size": 2929854,
+   "sha256": "a44d9c06f8547da082db5b12af4cba09c0dfb9d3d4e084f5e87be652369ee74b",
+   "samples": 252199
+  },
+  {
+   "session_key": 11344,
+   "year": 2026,
+   "file": "11344-653c0d37c081.seg",
+   "size": 1011850,
+   "sha256": "653c0d37c0811dcad84ffdff36404084151c7b3286ef85562e9adede0585cd3b",
+   "samples": 85488
+  },
+  {
+   "session_key": 11348,
+   "year": 2026,
+   "file": "11348-86cb339103f8.seg",
+   "size": 1899691,
+   "sha256": "86cb339103f8e0b22cc562f7183730588a6892bf339912658bb5c2e4af670216",
+   "samples": 157910
+  },
+  {
+   "session_key": 11349,
+   "year": 2026,
+   "file": "11349-96e0305283dd.seg",
+   "size": 1491507,
+   "sha256": "96e0305283dd84171575deff34c5ed3ab5789bd98b867a94b58611101166d20d",
+   "samples": 126196
+  },
+  {
+   "session_key": 11353,
+   "year": 2026,
+   "file": "11353-5b6914090d62.seg",
+   "size": 7045713,
+   "sha256": "5b6914090d62627308920e902cc1d067fe5ce468732d91d69e565616bca2ce9d",
+   "samples": 634674
+  },
+  {
+   "session_key": 11354,
+   "year": 2026,
+   "file": "11354-eba67d19cc57.seg",
+   "size": 2741548,
+   "sha256": "eba67d19cc57ccd8120a0f7971951ec667f8e41b75a2af4360c98bfeca21923c",
+   "samples": 241554
+  },
+  {
+   "session_key": 11355,
+   "year": 2026,
+   "file": "11355-6631d87f4580.seg",
+   "size": 2799318,
+   "sha256": "6631d87f45804ce2aade507a6b417ff12a8ae4b3b3ff992416c866a299701345",
+   "samples": 240143
+  },
+  {
+   "session_key": 11356,
+   "year": 2026,
+   "file": "11356-eedbbfb96e6c.seg",
+   "size": 2305826,
+   "sha256": "eedbbfb96e6c7ab0ef65d2565a5faef66ae4946119f3f96add3b0faaf41a6ca4",
+   "samples": 200300
+  },
+  {
+   "session_key": 11357,
+   "year": 2026,
+   "file": "11357-7f35b6fc6983.seg",
+   "size": 1362387,
+   "sha256": "7f35b6fc6983f99cf2b44ef84182042e64236d7fdcbb53fa326146f1ab24198c",
+   "samples": 115569
+  },
+  {
+   "session_key": 11361,
+   "year": 2026,
+   "file": "11361-0a2545cdae22.seg",
+   "size": 6072197,
+   "sha256": "0a2545cdae22208a68c481474d6dde6aff689616a0da73c5fd09eece46e3b384",
+   "samples": 554222
+  },
+  {
+   "session_key": 11362,
+   "year": 2026,
+   "file": "11362-f4d3192b3c80.seg",
+   "size": 2950722,
+   "sha256": "f4d3192b3c8082f0c0731864f0cfbd6cd4f03e59ce8980630f0a22e593d62373",
+   "samples": 254276
+  },
+  {
+   "session_key": 11363,
+   "year": 2026,
+   "file": "11363-87107152a931.seg",
+   "size": 2944050,
+   "sha256": "87107152a9311d3d2a1bcfbd37b48c00889d40a49e378e76be7394884fd672b9",
+   "samples": 264097
+  },
+  {
+   "session_key": 11364,
+   "year": 2026,
+   "file": "11364-a5fcb7a698a9.seg",
+   "size": 2718287,
+   "sha256": "a5fcb7a698a9ef64f76ecba4f5f87266b78a18ec4e0b2ef45294fb399f608aad",
+   "samples": 269606
+  },
+  {
+   "session_key": 11365,
+   "year": 2026,
+   "file": "11365-c75c360cfd9b.seg",
+   "size": 1564010,
+   "sha256": "c75c360cfd9bd68c04cb168180c9d93a797b0eb72cdc998691cdbf7d123534d1",
+   "samples": 134252
+  },
+  {
+   "session_key": 11369,
+   "year": 2026,
+   "file": "11369-aeadc373260c.seg",
+   "size": 5587138,
+   "sha256": "aeadc373260ca067dcccf527bada7367c562177cbf2923e5b79e86aa0465a0b2",
+   "samples": 481601
+  },
+  {
+   "session_key": 11370,
+   "year": 2026,
+   "file": "11370-5d85054597fd.seg",
+   "size": 2722947,
+   "sha256": "5d85054597fd8ef94293b2dbe97f22e5daa87fa65904b4ca3c46f75c3e534e13",
+   "samples": 241689
+  },
+  {
+   "session_key": 11371,
+   "year": 2026,
+   "file": "11371-7a0600924027.seg",
+   "size": 2976617,
+   "sha256": "7a0600924027efcff4a55935ba9535c2cb9df414b1786a5cca0432bdd93c1718",
+   "samples": 267596
+  },
+  {
+   "session_key": 11372,
+   "year": 2026,
+   "file": "11372-981715e58e72.seg",
+   "size": 2515595,
+   "sha256": "981715e58e72a7ed96ece703496c8b58b6faa45e9328024244fe714de455af70",
+   "samples": 218248
+  },
+  {
+   "session_key": 11373,
+   "year": 2026,
+   "file": "11373-cf12b8c7eb8b.seg",
+   "size": 2092839,
+   "sha256": "cf12b8c7eb8ba9a975676f081fe20327177448042ba9baf566877c5b60c81ad1",
+   "samples": 181505
+  },
+  {
+   "session_key": 11377,
+   "year": 2026,
+   "file": "11377-c96251378eb7.seg",
+   "size": 5661986,
+   "sha256": "c96251378eb78198ee070ee3444f04194b8c6cc84f4ae6ca3b05ff5606a4dcdb",
+   "samples": 495863
+  },
+  {
+   "session_key": 11378,
+   "year": 2026,
+   "file": "11378-41246bfd1e45.seg",
+   "size": 3045855,
+   "sha256": "41246bfd1e456c07508e14e779ed0699ab0ceeb78795203c771a4cdc89e16056",
+   "samples": 262874
+  },
+  {
+   "session_key": 11379,
+   "year": 2026,
+   "file": "11379-7d8704a9120d.seg",
+   "size": 2225055,
+   "sha256": "7d8704a9120d775fa398437423529d52ce58fe82136b82c4f365092def0f5cdc",
+   "samples": 208414
+  },
+  {
+   "session_key": 11383,
+   "year": 2026,
+   "file": "11383-41f1eb1a09c5.seg",
+   "size": 2306689,
+   "sha256": "41f1eb1a09c59bb63012fbb14ead57cd87a90ad774c580aaa3c265ff6ce37758",
+   "samples": 212475
+  },
+  {
+   "session_key": 11384,
+   "year": 2026,
+   "file": "11384-601d115199f7.seg",
+   "size": 2135812,
+   "sha256": "601d115199f7e2cac1053afcc96c3b347ea54abe662c868ff1538bc81bf5e7a9",
+   "samples": 188628
+  },
+  {
+   "session_key": 11388,
+   "year": 2026,
+   "file": "11388-ee98b5d1ac74.seg",
+   "size": 6080053,
+   "sha256": "ee98b5d1ac74846c002fda12b7641593c587cd00af15ea5147bd98d4e1b5485f",
+   "samples": 517410
+  },
+  {
+   "session_key": 11389,
+   "year": 2026,
+   "file": "11389-f047344b4f94.seg",
+   "size": 2725438,
+   "sha256": "f047344b4f942848ac586353841b0129d27303e52101e2062f147804dcbbc9aa",
+   "samples": 235551
+  },
+  {
+   "session_key": 11390,
+   "year": 2026,
+   "file": "11390-62053385397b.seg",
+   "size": 3008923,
+   "sha256": "62053385397b165804cb5155e9fd25a3240c68869ff9f33b2ea3654dbc4f688b",
+   "samples": 257441
+  },
+  {
+   "session_key": 11391,
+   "year": 2026,
+   "file": "11391-29e595204de6.seg",
+   "size": 2267745,
+   "sha256": "29e595204de6b6d85a2be7e1bd8ab16ad98ff071da3eb0db928200a97166f790",
+   "samples": 196303
+  },
+  {
+   "session_key": 11392,
+   "year": 2026,
+   "file": "11392-acb8ec2165f0.seg",
+   "size": 1421122,
+   "sha256": "acb8ec2165f0296a6a45452647da1f8e276cf8668ce1fce86f05cb64e68c3462",
+   "samples": 121328
+  },
+  {
+   "session_key": 11396,
+   "year": 2026,
+   "file": "11396-c2237a22fa77.seg",
+   "size": 5624247,
+   "sha256": "c2237a22fa7753aa4f501ad9ffd7c588dffae683e413ae038df558048183a259",
+   "samples": 476514
+  },
+  {
+   "session_key": 11397,
+   "year": 2026,
+   "file": "11397-842380b3a2f1.seg",
+   "size": 2631395,
+   "sha256": "842380b3a2f173ce4d332d3c870a8b6befe17c8ec3566c84aadbf8990d0a3188",
+   "samples": 227304
+  },
+  {
+   "session_key": 11398,
+   "year": 2026,
+   "file": "11398-0d57c739fb87.seg",
+   "size": 3073082,
+   "sha256": "0d57c739fb87e037370d33e74dc086109ae0d9cc418b5ca4ded7fa97c1d1e5f4",
+   "samples": 268488
+  },
+  {
+   "session_key": 11399,
+   "year": 2026,
+   "file": "11399-a6865b3f9075.seg",
+   "size": 2180410,
+   "sha256": "a6865b3f907533880ab2dc705c2e0915fe3249a6b0823039b08c4ea8400f218b",
+   "samples": 190480
+  },
+  {
+   "session_key": 11400,
+   "year": 2026,
+   "file": "11400-48af7d2cb703.seg",
+   "size": 1779480,
+   "sha256": "48af7d2cb703514af8aa6bd313ecc002b590e21a9ea3cd1f8a5c12d279a56cc6",
+   "samples": 156184
+  },
+  {
+   "session_key": 11404,
+   "year": 2026,
+   "file": "11404-85874584a193.seg",
+   "size": 7500422,
+   "sha256": "85874584a1931b55bf368c9a0a80a1d93bd191ef17e8a35eaf0bede7b321d8dc",
+   "samples": 689162
+  },
+  {
+   "session_key": 11405,
+   "year": 2026,
+   "file": "11405-428b4450d739.seg",
+   "size": 2715376,
+   "sha256": "428b4450d739e017493f25a8f9e6d19b383bb436800e1e75e21b297a592481f0",
+   "samples": 238781
+  },
+  {
+   "session_key": 11406,
+   "year": 2026,
+   "file": "11406-af1bcef6455a.seg",
+   "size": 2814684,
+   "sha256": "af1bcef6455ab102c9b6223b9e7a3ca5e8a49953104760b6ded7bc0ab3e6d4ad",
+   "samples": 237641
+  },
+  {
+   "session_key": 11407,
+   "year": 2026,
+   "file": "11407-6e40bcb987e3.seg",
+   "size": 2141753,
+   "sha256": "6e40bcb987e379c0a96fafca3eed976154c1de77721655f64f14ea3b6286103b",
+   "samples": 186565
+  },
+  {
+   "session_key": 11408,
+   "year": 2026,
+   "file": "11408-c35fb5321b93.seg",
+   "size": 5403986,
+   "sha256": "c35fb5321b93b354948399a70c286bc94d195e26eecc8531e5508a1053524e3a",
+   "samples": 560080
+  },
+  {
+   "session_key": 11412,
+   "year": 2026,
+   "file": "11412-22add3a341f0.seg",
+   "size": 5771076,
+   "sha256": "22add3a341f081b56d9cc7cbcf2a12a27e009b0f7b768b031655e30107fc88a9",
+   "samples": 487785
+  },
+  {
+   "session_key": 11727,
+   "year": 2026,
+   "file": "11727-36787859a92a.seg",
+   "size": 2818470,
+   "sha256": "36787859a92a2433834754c69a4237c8bfc7ccab0b957ade824f95a28b3a1aa7",
+   "samples": 247001
+  },
+  {
+   "session_key": 11728,
+   "year": 2026,
+   "file": "11728-207cc725215a.seg",
+   "size": 3210524,
+   "sha256": "207cc725215a5a6552ef95c74de398c8f141a62c0d1d45561dc86a50167a75e8",
+   "samples": 277409
+  },
+  {
+   "session_key": 11729,
+   "year": 2026,
+   "file": "11729-918eaedb3d4e.seg",
+   "size": 2044906,
+   "sha256": "918eaedb3d4eb57b91a53d38c0babb847167cfaa7b558e7eecfac2a0af2bda3e",
+   "samples": 181981
+  },
+  {
+   "session_key": 11730,
+   "year": 2026,
+   "file": "11730-74db16dfa398.seg",
+   "size": 1321770,
+   "sha256": "74db16dfa3983dba8f91da96941a7b11e1186d9843747bd9a15a902788d6909d",
+   "samples": 115684
+  },
+  {
+   "session_key": 11731,
+   "year": 2026,
+   "file": "11731-57466cd01cca.seg",
+   "size": 6141993,
+   "sha256": "57466cd01cca3b4e87f595a74d8a78a3dad970bc1dee85971ca372c11bddcc96",
+   "samples": 532469
+  }
+ ]
+}
