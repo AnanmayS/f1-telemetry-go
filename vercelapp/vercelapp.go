@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/AnanmayS/f1-telemetry-go/internal/api"
+	"github.com/AnanmayS/f1-telemetry-go/internal/predict"
 	"github.com/AnanmayS/f1-telemetry-go/internal/store"
 )
 
@@ -59,8 +60,12 @@ func setup() {
 		return
 	}
 	log.Info("store open", "dir", dir, "segments", st.Stats().Segments)
+	preds, err := predict.LoadFile(dir)
+	if err != nil {
+		log.Warn("predictions unavailable", "err", err)
+	}
 	app = api.New(api.Options{
-		Store: st, Log: log,
+		Store: st, Log: log, Predictions: preds,
 		RateRPS: 20, RateBurst: 120,
 		// Vercel's proxy sets X-Real-Ip and clients cannot reach the function around it.
 		ClientIPHeader: "X-Real-Ip",

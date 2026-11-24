@@ -17,6 +17,7 @@ import (
 	"github.com/AnanmayS/f1-telemetry-go/internal/ingest"
 	"github.com/AnanmayS/f1-telemetry-go/internal/live"
 	"github.com/AnanmayS/f1-telemetry-go/internal/openf1"
+	"github.com/AnanmayS/f1-telemetry-go/internal/predict"
 	"github.com/AnanmayS/f1-telemetry-go/internal/store"
 )
 
@@ -64,7 +65,11 @@ func main() {
 		go replay(ctx, log, st, *dataDir, *replayYear, *replayKey, *replaySpd)
 	}
 
-	app := api.New(api.Options{Store: st, Log: log, StaticDir: *static, RateRPS: *rateRPS, RateBurst: *rateBurst, TrustProxy: *trustProxy, RespCacheBytes: respBytes})
+	preds, err := predict.LoadFile(*dataDir)
+	if err != nil {
+		log.Warn("predictions unavailable", "err", err)
+	}
+	app := api.New(api.Options{Predictions: preds, Store: st, Log: log, StaticDir: *static, RateRPS: *rateRPS, RateBurst: *rateBurst, TrustProxy: *trustProxy, RespCacheBytes: respBytes})
 	go app.Run(ctx)
 
 	srv := &http.Server{

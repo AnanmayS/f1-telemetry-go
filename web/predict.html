@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ghostlap: race predictions</title>
+    <meta name="description" content="Each Grand Prix simulated 10,000 times from qualifying, the grid and earlier races: chances to win, reach the podium and score points, with measured accuracy." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ghostlap" />
+    <meta property="og:title" content="ghostlap: race predictions" />
+    <meta property="og:description" content="Each Grand Prix simulated 10,000 times from qualifying, the grid and earlier races: chances to win, reach the podium and score points, with measured accuracy." />
+    <meta name="twitter:card" content="summary" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23101214'/%3E%3Cpath d='M4 22c5-12 9-12 12-6s7 6 12-6' fill='none' stroke='%235aa9ff' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M4 16c5-8 9-8 12-2s7 4 12-2' fill='none' stroke='%23ff8000' stroke-width='3' stroke-linecap='round' stroke-dasharray='4 4'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>ghostlap</h1>
+      <p class="tag">Race outcomes, simulated</p>
+      <nav class="nav" aria-label="Pages"><a href="/">Compare laps</a><a href="/predict.html" aria-current="page">Race predictions</a></nav>
+    </header>
+
+    <main id="app">
+      <section class="panel predhead">
+        <label class="field" for="race"><span>Race</span><select id="race" disabled></select></label>
+        <p id="lede" class="lede"></p>
+      </section>
+      <p id="status" class="status loading" role="status">Loading races…</p>
+      <section id="result" class="panel predtable" aria-label="Prediction" hidden></section>
+      <section id="about" class="panel predabout" aria-label="How this works" hidden></section>
+    </main>
+
+    <footer class="foot">
+      <p>
+        Unofficial. Not associated with Formula 1 companies. Data from <a href="https://openf1.org" rel="noopener">OpenF1</a>.
+        Estimates from past data for interest only; not betting odds or advice.
+      </p>
+      <p><a href="https://github.com/AnanmayS/f1-telemetry-go" rel="noopener">Source on GitHub</a></p>
+    </footer>
+
+    <script type="module" src="/src/predict.ts"></script>
+  </body>
+</html>

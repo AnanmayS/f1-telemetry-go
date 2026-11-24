@@ -12,6 +12,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/AnanmayS/f1-telemetry-go/internal/predict"
 	"github.com/AnanmayS/f1-telemetry-go/internal/segment"
 	"github.com/AnanmayS/f1-telemetry-go/internal/store"
 )
@@ -77,6 +78,13 @@ func main() {
 		fatal(err)
 	}
 	os.Remove(filepath.Join(*out, store.ManifestName+".lock"))
+	// Race predictions are small and cover every race, bundled or not.
+	if _, err := os.Stat(filepath.Join(*src, predict.PredictionsFile)); err == nil {
+		if err := copyFile(filepath.Join(*src, predict.PredictionsFile), filepath.Join(*out, predict.PredictionsFile)); err != nil {
+			fatal(err)
+		}
+		fmt.Println("included", predict.PredictionsFile)
+	}
 	fmt.Printf("bundled %d of %d sessions, %.1f MiB\n", len(picked), len(items), float64(used)/(1<<20))
 }
 

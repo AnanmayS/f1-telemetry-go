@@ -22,6 +22,7 @@ import (
 	"github.com/AnanmayS/f1-telemetry-go/internal/laps"
 	"github.com/AnanmayS/f1-telemetry-go/internal/lru"
 	"github.com/AnanmayS/f1-telemetry-go/internal/model"
+	"github.com/AnanmayS/f1-telemetry-go/internal/predict"
 	"github.com/AnanmayS/f1-telemetry-go/internal/segment"
 	"github.com/AnanmayS/f1-telemetry-go/internal/store"
 )
@@ -41,6 +42,8 @@ type Options struct {
 	// RespCacheBytes bounds the cache of finished, gzip-compressed lap and
 	// compare responses (0 = 64 MiB, negative = disabled).
 	RespCacheBytes int64
+	// Predictions is the race prediction file; nil serves an empty list.
+	Predictions *predict.File
 }
 
 // Server implements http.Handler.
@@ -52,6 +55,8 @@ type Server struct {
 	static  string
 	metrics *metrics
 	visits  *visitCounter
+
+	predictions *predictions
 
 	// responses holds gzip bodies keyed by ETag. The ETag covers the segment
 	// build, so entries of a rebuilt session simply stop being asked for.
@@ -96,6 +101,9 @@ func New(o Options) *Server {
 	s.route("GET /api/sessions/{key}/laps", "laps", s.handleLaps)
 	s.route("GET /api/sessions/{key}/laps/{driver}/{lap}", "lap", s.handleLap)
 	s.route("GET /api/compare", "compare", s.handleCompare)
+	s.predictions = newPredictions(o.Predictions)
+	s.route("GET /api/predictions", "predictions", s.handlePredictions)
+	s.route("GET /api/predictions/{key}", "prediction", s.handlePrediction)
 	s.route("GET /api/health", "health", s.handleHealth)
 	s.route("/api/", "api_unknown", func(w http.ResponseWriter, r *http.Request) *apiError {
 		if r.Method != http.MethodGet {

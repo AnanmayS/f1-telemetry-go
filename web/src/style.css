@@ -325,3 +325,44 @@ button[aria-pressed='true'], button[aria-expanded='true'] { background: var(--te
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Page navigation */
+.nav { display: flex; gap: 4px; margin-left: auto; font-size: 13px; }
+.nav a { padding: 4px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; }
+.nav a:hover { color: var(--text); }
+.nav a[aria-current='page'] { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+
+/* Race predictions */
+.predhead { display: grid; gap: 8px; margin-top: 8px; padding: 10px; }
+.predhead .field { max-width: 420px; }
+.lede { margin: 0; }
+.predtable, .predabout { margin-top: 12px; padding: 10px; }
+.predtable.stale { opacity: 0.5; }
+.predabout p { margin: 8px 0; max-width: 75ch; }
+.scroll { overflow-x: auto; }
+.pred { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pred th, .pred td { padding: 5px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+.pred thead th { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.pred th:first-child { text-align: left; }
+.pred tbody tr:last-child > * { border-bottom: 0; }
+.pred.small { max-width: 640px; }
+.drv { font-weight: 600; }
+.drv small { margin-left: 8px; font-weight: 400; }
+.team { display: inline-block; width: 4px; height: 14px; margin-right: 8px; border-radius: 2px; background: var(--even); vertical-align: -2px; }
+.prob { position: relative; min-width: 64px; }
+.prob::before { content: ''; position: absolute; inset: 4px auto 4px 0; width: calc(var(--p) * 100%); border-radius: 3px; background: var(--accent); opacity: 0.22; }
+.prob .val { position: relative; }
+.rangecell { min-width: 190px; text-align: left !important; }
+.rangecell small { margin-left: 8px; }
+.range { position: relative; display: inline-block; width: 110px; height: 10px; border-radius: 5px; background: var(--grid); vertical-align: middle; }
+.range .band { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--even); }
+.range .mid { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--text); }
+.range .real { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel); }
+.res.in { color: #3fb97a; }
+.res.miss { color: #e0a23a; }
+.res.out { color: var(--muted); }
+.won .drv span:nth-child(2)::after { content: ' ★'; color: var(--accent); }
+@media (max-width: 599px) {
+  .drv small { display: none; }
+  .nav { margin-left: 0; width: 100%; }
+}
