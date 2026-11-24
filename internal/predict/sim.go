@@ -49,6 +49,13 @@ type car struct {
 	laps    int
 }
 
+// Limits on what Simulate will run, so a bad inputs file cannot ask for
+// unbounded work.
+const (
+	MaxDrivers = 40
+	MaxLaps    = 120
+)
+
 const (
 	scLap  = 1.45 // lap time behind the safety car, relative to a racing lap
 	vscLap = 1.30
@@ -60,9 +67,21 @@ const (
 func Simulate(in *Inputs, runs int, seed uint64) *Prediction {
 	n := len(in.Drivers)
 	out := &Prediction{Key: in.Key, Runs: runs, Drivers: make([]DriverOut, n)}
-	if n == 0 || in.Laps < 2 || runs < 1 {
+	if n == 0 || n > MaxDrivers || in.Laps < 2 || in.Laps > MaxLaps || runs < 1 {
+		out.Drivers = out.Drivers[:0]
 		return out
 	}
+	// Strategies with no stints cannot be driven; with none left, run one set to the end.
+	plans := make([][]PlanStint, 0, len(in.Plans))
+	for _, pl := range in.Plans {
+		if len(pl) > 0 {
+			plans = append(plans, pl)
+		}
+	}
+	if len(plans) == 0 {
+		plans = [][]PlanStint{{{Compound: "MEDIUM", Frac: 1}}}
+	}
+	priorWeight := math.Max(0, math.Min(1, in.PriorWeight))
 	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15))
 	counts := make([][]int, n)
 	for i := range counts {
@@ -78,8 +97,8 @@ func Simulate(in *Inputs, runs int, seed uint64) *Prediction {
 	kind := make([]byte, in.Laps+2) // per lap: 0 green, 'S' safety car, 'V' virtual
 	p := in.Params
 	window := int(math.Round(p.SCWindow * float64(in.Laps)))
-	planTyres := make([][]Tyre, len(in.Plans))
-	for i, plan := range in.Plans {
+	planTyres := make([][]Tyre, len(plans))
+	for i, plan := range plans {
 		for _, s := range plan {
 			planTyres[i] = append(planTyres[i], in.Tyres[s.Compound])
 		}
@@ -121,8 +140,8 @@ func Simulate(in *Inputs, runs int, seed uint64) *Prediction {
 		for i := range cars {
 			d := in.Drivers[i]
 			c := &cars[i]
-			pi := rng.IntN(len(in.Plans))
-			*c = car{pace: d.Pace + rng.NormFloat64()*in.PaceSD*p.PaceScale, plan: in.Plans[pi], tyres: planTyres[pi], ends: c.ends[:0]}
+			pi := rng.IntN(len(plans))
+			*c = car{pace: d.Pace + rng.NormFloat64()*in.PaceSD*p.PaceScale, plan: plans[pi], tyres: planTyres[pi], ends: c.ends[:0]}
 			var acc float64
 			for _, s := range c.plan {
 				acc += s.Frac
@@ -156,7 +175,11 @@ func Simulate(in *Inputs, runs int, seed uint64) *Prediction {
 			byTime(live)
 
 			k := kind[lap]
-			neutralStart := k != 0 && kind[lap-1] == 0
+			// A neutralisation that began on lap 1 takes effect here, on the
+			// first lap the loop sees. A virtual safety car upgraded to a full
+			// one bunches the field at the upgrade.
+			neutralStart := k != 0 && (kind[lap-1] == 0 || lap == 2)
+			bunch := k == 'S' && (kind[lap-1] != 'S' || lap == 2)
 			for _, i := range live {
 				c := &cars[i]
 				c.pitted = false
@@ -209,7 +232,7 @@ func Simulate(in *Inputs, runs int, seed uint64) *Prediction {
 					}
 					c.t = ahead.t + p.FollowGap
 				}
-			} else if k == 'S' && neutralStart {
+			} else if bunch && m > 0 {
 				// The field closes up behind the safety car.
 				byTime(live)
 				lead := cars[live[0]].t
@@ -251,13 +274,13 @@ func Simulate(in *Inputs, runs int, seed uint64) *Prediction {
 	}
 
 	fr := float64(runs)
-	blend := in.PriorWeight > 0 && len(in.Prior) == n
+	blend := priorWeight > 0 && len(in.Prior) == n
 	for i, d := range in.Drivers {
 		o := DriverOut{Number: d.Number, Acronym: d.Acronym, Name: d.Name, Team: d.Team, Colour: d.Colour, Grid: d.Grid, Dist: make([]float64, n)}
 		for pos, c := range counts[i] {
 			o.Dist[pos] = float64(c) / fr
 			if blend && len(in.Prior[i]) == n {
-				o.Dist[pos] = (1-in.PriorWeight)*o.Dist[pos] + in.PriorWeight*in.Prior[i][pos]
+				o.Dist[pos] = (1-priorWeight)*o.Dist[pos] + priorWeight*math.Max(0, in.Prior[i][pos])
 			}
 		}
 		o.DNF = float64(dnfs[i]) / fr

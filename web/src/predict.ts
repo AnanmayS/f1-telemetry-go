@@ -141,7 +141,7 @@ function renderAbout(): void {
       'p',
       {},
       'Every race is predicted using only information from before it started, then scored against the real result. ',
-      'The settings were tuned on 2023 and 2024; the figures below are for later races the tuning never saw. ',
+      'The settings were tuned on 2023 and 2024; the figures below are for later races. ',
       'For picking the winner alone, the starting grid has been the better guide; the simulation does better on the rest of the order.',
     ),
   ];
@@ -174,7 +174,7 @@ function renderAbout(): void {
               el('th', { scope: 'col' }, 'Average miss'),
             ),
           ),
-          el('tbody', {}, row('This simulation', b.model), row('Grid order alone', b.grid_only)),
+          el('tbody', {}, row('This model', b.model), row('Grid order alone', b.grid_only)),
         ),
       ),
     );

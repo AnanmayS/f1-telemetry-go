@@ -24,7 +24,7 @@ type predictions struct {
 func newPredictions(f *predict.File) *predictions {
 	p := &predictions{file: f, byKey: map[int]*predict.RaceFile{}, once: map[int]*sync.Once{}, done: map[int]*predict.Prediction{}}
 	if f != nil {
-		p.tag = strconv.FormatInt(f.Generated.Unix(), 36)
+		p.tag = predict.ModelVersion + "-" + strconv.FormatInt(f.Generated.Unix(), 36)
 		for i := range f.Races {
 			p.byKey[f.Races[i].Key] = &f.Races[i]
 		}
@@ -97,7 +97,7 @@ func (s *Server) handlePrediction(w http.ResponseWriter, r *http.Request) *apiEr
 		return e
 	}
 	rf := s.predictions.byKey[key]
-	if rf == nil {
+	if rf == nil || rf.Inputs == nil {
 		return notFound("no prediction for this session")
 	}
 	if notModified(w, r, etag("prediction", s.predictions.tag, strconv.Itoa(key)), cacheList) {

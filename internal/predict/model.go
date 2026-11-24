@@ -573,7 +573,7 @@ func Fit(past []*Race, cache map[int]*raceFit) *Model {
 	}
 
 	// 3. Pace regression, walking forward so each row only sees earlier races.
-	drv, team := map[int][]float64{}, map[string][]float64{}
+	drv, team := map[string][]float64{}, map[string][]float64{}
 	var px [][]float64
 	var py, pw []float64
 	for _, f := range m.fits {
@@ -584,13 +584,13 @@ func Fit(past []*Race, cache map[int]*raceFit) *Model {
 				continue
 			}
 			q, hasQ := f.quali[e.Number]
-			if len(drv[e.Number]) == 0 && len(team[e.Team]) == 0 && !hasQ {
+			if len(drv[e.Acronym]) == 0 && len(team[e.Team]) == 0 && !hasQ {
 				continue
 			}
 			// The front of the grid decides wins and podiums, and its qualifying
 			// times are the comparable ones, so those rows count for more.
 			w := math.Sqrt(frontWeight(gf[e.Number]))
-			x := paceFeatures(q, hasQ, drv[e.Number], team[e.Team], gf[e.Number])
+			x := paceFeatures(q, hasQ, drv[e.Acronym], team[e.Team], gf[e.Number])
 			for k := range x {
 				x[k] *= w
 			}
@@ -638,11 +638,13 @@ func Fit(past []*Race, cache map[int]*raceFit) *Model {
 }
 
 // observe adds one race's measured pace to the form histories.
-func (m *Model) observe(f *raceFit, drv map[int][]float64, team map[string][]float64) {
+// Form follows the driver (by acronym), not the car number: numbers change
+// hands between seasons, and the champion may switch to number 1.
+func (m *Model) observe(f *raceFit, drv map[string][]float64, team map[string][]float64) {
 	sum, cnt := map[string]float64{}, map[string]int{}
 	for _, e := range f.race.Drivers {
 		if p, ok := f.pace[e.Number]; ok {
-			drv[e.Number] = append(drv[e.Number], p)
+			drv[e.Acronym] = append(drv[e.Acronym], p)
 			sum[e.Team] += p
 			cnt[e.Team]++
 		}
@@ -661,7 +663,7 @@ func (m *Model) Inputs(r *Race, p Params) *Inputs {
 	in.Tyres["MEDIUM"] = Tyre{0, m.beta[4]}
 	in.Tyres["HARD"] = Tyre{m.beta[2], m.beta[5]}
 
-	drv, team := map[int][]float64{}, map[string][]float64{}
+	drv, team := map[string][]float64{}, map[string][]float64{}
 	var pitHere, pitAll []float64
 	var plansHere, plansAll [][]PlanStint
 	for _, f := range m.fits {
@@ -724,7 +726,7 @@ func (m *Model) Inputs(r *Race, p Params) *Inputs {
 			continue
 		}
 		q, hasQ := quali[e.Number]
-		x := paceFeatures(q, hasQ, drv[e.Number], team[e.Team], gf[e.Number])
+		x := paceFeatures(q, hasQ, drv[e.Acronym], team[e.Team], gf[e.Number])
 		var pace float64
 		for k, v := range x {
 			pace += m.coef[k] * v

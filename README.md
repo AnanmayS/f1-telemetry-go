@@ -46,14 +46,15 @@ Full corpus, generated 2026-11-16: every session OpenF1 has telemetry for, 2023 
 
 Each Grand Prix is simulated 10,000 times from its qualifying result, its grid and the races before it, giving every driver a chance to win, reach the podium, score points and retire, and a likely finishing range. The original spec ruled predictions out; they were added later on request, and they are an estimate for interest, not betting odds.
 
-Measured on the 45 races from 2025 onwards, which the tuning never saw (`bench/predict-report.sh`, [docs/PREDICTIONS.md](docs/PREDICTIONS.md)):
+Measured on the 45 races from 2025 onwards, which the settings were not tuned on (one design choice was made after looking at them; see the caveats in the doc) (`bench/predict-report.sh`, [docs/PREDICTIONS.md](docs/PREDICTIONS.md)):
 
-| | Simulation | Grid order alone |
+| | Model (simulation blended with each grid slot's record) | Grid order alone |
 |---|---|---|
 | Top pick won | 56% | 69% |
-| Podium finishers among the top three picks | 2.04 of 3 | 2.04 of 3 |
-| Mean finishing-position error | 2.60 places | 2.90 places |
-| Brier score, points finish (lower is better) | 0.155 | 0.165 |
+| Podium finishers among the top three picks | 2.09 of 3 | 2.04 of 3 |
+| Mean finishing-position error | 2.59 places | 2.90 places |
+| Brier score, points finish (lower is better) | 0.156 | 0.165 |
+| Brier score, win (lower is better) | 0.030 | 0.025 |
 | Finishers inside their 10th-90th percentile range | 81% (80% is ideal) | n/a |
 
 So it is useful for the shape of the whole result and not for calling the winner, where the pole sitter is the better bet.

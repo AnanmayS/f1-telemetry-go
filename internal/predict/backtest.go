@@ -65,6 +65,9 @@ func (s *scorer) add(r *Race, fc []forecast) {
 	sort.SliceStable(byWin, func(a, b int) bool { return byWin[a].win > byWin[b].win })
 	byPod := append([]forecast(nil), fc...)
 	sort.SliceStable(byPod, func(a, b int) bool { return byPod[a].podium > byPod[b].podium })
+	if len(fc) == 0 {
+		return
+	}
 	s.m.Races++
 	if e := actual[byWin[0].number]; e != nil && e.Pos == 1 {
 		s.m.WinnerHit++
@@ -284,8 +287,8 @@ func Backtest(races []*Race, runs int) *Report {
 	}{
 		{func(p *Params, v float64) { p.StartSD = v }, []float64{0.25, 0.5, 1, 2, 3}},
 		{func(p *Params, v float64) { p.PassDelta = v }, []float64{0.3, 0.6, 0.9, 1.3, 1.8, 2.5, 3.5}},
-		{func(p *Params, v float64) { p.GridGap = v }, []float64{0.2, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0}},
-		{func(p *Params, v float64) { p.SCWindow = v }, []float64{0.1, 0.25, 0.4}},
+		{func(p *Params, v float64) { p.GridGap = v }, []float64{0.2, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0}},
+		{func(p *Params, v float64) { p.SCWindow = v }, []float64{0.1, 0.25, 0.4, 0.6}},
 	}
 	for pass := 0; pass < 2; pass++ {
 		for _, g := range grid {
@@ -376,6 +379,10 @@ func Backtest(races []*Race, runs int) *Report {
 	return rep
 }
 
+// ModelVersion changes whenever the simulator's output for the same inputs
+// changes, so cached responses are not reused across such a change.
+const ModelVersion = "1"
+
 // PredictionsFile is what the server loads.
 const PredictionsFile = "predictions.json.gz"
 
@@ -444,5 +451,13 @@ func LoadFile(dataDir string) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Keep only races that can actually be simulated.
+	kept := f.Races[:0]
+	for _, r := range f.Races {
+		if in := r.Inputs; in != nil && len(in.Drivers) > 0 && len(in.Drivers) <= MaxDrivers && in.Laps >= 2 && in.Laps <= MaxLaps {
+			kept = append(kept, r)
+		}
+	}
+	f.Races = kept
 	return &f, nil
 }

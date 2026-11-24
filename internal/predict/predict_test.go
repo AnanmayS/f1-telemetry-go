@@ -336,3 +336,96 @@ func TestGridPriorAndBlend(t *testing.T) {
 		t.Error("weight 0 should leave the simulation untouched")
 	}
 }
+
+func TestSimulateSurvivesBadInputs(t *testing.T) {
+	one := testInputs(1)
+	one.Neutrals = [][]NeutralPat{{{"SC", 0.02, 3}}, {{"VSC", 0.3, 2}, {"SC", 0.34, 3}}}
+	one.DNFRate = 1 // the only car retires, sometimes before the safety car
+	if p := Simulate(one, 300, 1); len(p.Drivers) != 1 {
+		t.Fatal("one driver")
+	}
+
+	bad := testInputs(6)
+	bad.Plans = [][]PlanStint{{}, nil}
+	bad.Prior = make([][]float64, 6)
+	for i := range bad.Prior {
+		bad.Prior[i] = []float64{1, 0, 0, 0, 0, 0}
+	}
+	bad.PriorWeight = 7 // clamped to 1
+	for _, d := range Simulate(bad, 100, 1).Drivers {
+		for _, v := range d.Dist {
+			if v < 0 || v > 1 {
+				t.Fatalf("probability out of range: %v", d.Dist)
+			}
+		}
+	}
+
+	huge := testInputs(3)
+	huge.Laps = MaxLaps + 1
+	if p := Simulate(huge, 10, 1); len(p.Drivers) != 0 {
+		t.Error("over-long race should be refused")
+	}
+	if p := Simulate(testInputs(MaxDrivers+1), 10, 1); len(p.Drivers) != 0 {
+		t.Error("oversized field should be refused")
+	}
+}
+
+func TestSafetyCarOnLapOneBunchesTheField(t *testing.T) {
+	// Two equal cars, a big gap after lap 1 and no way to pass: without a
+	// safety car the order never changes. With one from lap 1 the gap closes,
+	// so the second car's planned earlier stop can put it ahead sometimes.
+	in := testInputs(2)
+	in.DNFRate, in.PaceSD, in.LapSD = 0, 0, 0.004
+	in.Params.GridGap, in.Params.StartSD, in.Params.PassDelta = 30, 0, 0.3
+	in.Plans = [][]PlanStint{{{"MEDIUM", 0.5}, {"HARD", 0.5}}}
+	in.Neutrals = [][]NeutralPat{nil}
+	apart := Simulate(in, 500, 3)
+	in.Neutrals = [][]NeutralPat{{{"SC", 0.02, 3}}}
+	close := Simulate(in, 500, 3)
+	win := func(p *Prediction, grid int) float64 {
+		for _, d := range p.Drivers {
+			if d.Grid == grid {
+				return d.Win
+			}
+		}
+		return -1
+	}
+	if win(apart, 2) != 0 {
+		t.Fatalf("30 s behind with no safety car should never win, got %v", win(apart, 2))
+	}
+	if win(close, 2) <= 0.05 {
+		t.Errorf("after a lap-1 safety car the second car should win sometimes, got %v", win(close, 2))
+	}
+}
+
+func TestFormFollowsTheDriverNotTheNumber(t *testing.T) {
+	rng := rand.New(rand.NewPCG(11, 4))
+	pace := make([]float64, 20)
+	for i := range pace {
+		pace[i] = float64(i) * 0.001
+	}
+	var races []*Race
+	for k := 1; k <= 10; k++ {
+		races = append(races, synthRace(k, rng, pace, 0.0006, 0.0002, 0.004))
+	}
+	// Swapping two drivers' car numbers for the next race must not change
+	// what is expected of either driver.
+	next := synthRace(11, rng, pace, 0.0006, 0.0002, 0.004)
+	m := Fit(races, map[int]*raceFit{})
+	paces := func() map[string]float64 {
+		by := map[string]float64{}
+		for _, d := range m.Inputs(next, DefaultParams).Drivers {
+			by[d.Acronym] = d.Pace
+		}
+		return by
+	}
+	before := paces()
+	next.Drivers[0].Number, next.Drivers[19].Number = next.Drivers[19].Number, next.Drivers[0].Number
+	after := paces()
+	if before["A"] != after["A"] || before["T"] != after["T"] {
+		t.Errorf("pace followed the car number: A %v -> %v, T %v -> %v", before["A"], after["A"], before["T"], after["T"])
+	}
+	if before["A"] >= before["T"] {
+		t.Errorf("A is the fast driver: A %v, T %v", before["A"], before["T"])
+	}
+}
