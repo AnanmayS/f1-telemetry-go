@@ -131,3 +131,61 @@ export const api = {
       signal,
     ),
 };
+
+// Race predictions (docs/PREDICTIONS.md).
+
+export interface PredRace {
+  session_key: number;
+  year: number;
+  name: string;
+  circuit: string;
+  date: string;
+  run: boolean;
+  wet: boolean;
+}
+
+export interface PredMetrics {
+  races: number;
+  winner_hit: number;
+  winner_prob: number;
+  podium_overlap: number;
+  mae: number;
+  coverage: number;
+}
+
+export interface PredList {
+  races: PredRace[];
+  backtest?: { from_year: number; model: PredMetrics; grid_only: PredMetrics };
+}
+
+export interface PredDriver {
+  number: number;
+  acronym: string;
+  name: string;
+  team: string;
+  colour?: string;
+  grid: number;
+  win: number;
+  podium: number;
+  points: number;
+  dnf: number;
+  mean: number;
+  p10: number;
+  p50: number;
+  p90: number;
+  pace: number;
+  actual?: number;
+  retired?: boolean;
+}
+
+export interface Prediction {
+  race: PredRace;
+  runs: number;
+  drivers: PredDriver[];
+  inputs: { laps: number; pit_loss_s: number; lap_s: number; trained_on: number; retirement_rate: number; strategies: number };
+}
+
+export const predictions = {
+  list: (signal?: AbortSignal) => get<PredList>('/api/predictions', signal),
+  race: (key: number, signal?: AbortSignal) => get<Prediction>(`/api/predictions/${key}`, signal),
+};

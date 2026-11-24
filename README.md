@@ -15,9 +15,10 @@ Underneath is a time-series storage engine written in Go for this one kind of da
 | M0 data spike | Done. Findings in [docs/DATA.md](docs/DATA.md). |
 | M1 ingest + storage engine | Done. Full-corpus ingest takes about 12 hours at OpenF1's rate limit; see [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for how much was ingested when the numbers were taken. |
 | M2 query API | Done. [docs/API.md](docs/API.md). |
-| M3 web UI | Done, then rebuilt around a sectioned track map. 21 Playwright tests; tested in Chromium (desktop and phone viewports); Safari and Firefox not yet checked. |
+| M3 web UI | Done, then rebuilt around a sectioned track map. 24 Playwright tests; tested in Chromium (desktop and phone viewports); Safari and Firefox not yet checked. |
 | M4 launch | Hosted on Vercel at https://ghostlap-six.vercel.app with a bundle of the newest sessions (a Vercel Function is capped at 250 MB, so not the full corpus). Image, CI and guide for the VPS path are in [docs/DEPLOY.md](docs/DEPLOY.md); that path is not deployed. |
 | M5 live ingest | WAL, memtable, seal and crash test done, driven by replaying recorded sessions. No live network client: OpenF1's live feed is paid. |
+| Race predictions (added scope) | Done. Monte Carlo race simulation, backtested walk-forward; page at `/predict.html`. Beats the grid-only baseline on finishing order and points, loses to it on picking the winner. [docs/PREDICTIONS.md](docs/PREDICTIONS.md). |
 
 ## Numbers
 
@@ -40,6 +41,23 @@ Full corpus, generated 2026-11-16: every session OpenF1 has telemetry for, 2023 
 | Correctness | 8 golden sessions (qualifying + race per season, 2023–2026): lap counts, lap times and fastest laps match official timing; final delta equals the official difference |
 | Live path | 697,845 events through WAL, memtable and seal in 1.2 s; 12 SIGKILLs during a replay, no acknowledged event lost, sealed file byte-identical to batch ingest |
 <!-- numbers:end -->
+
+## Race predictions
+
+Each Grand Prix is simulated 10,000 times from its qualifying result, its grid and the races before it, giving every driver a chance to win, reach the podium, score points and retire, and a likely finishing range. The original spec ruled predictions out; they were added later on request, and they are an estimate for interest, not betting odds.
+
+Measured on the 45 races from 2025 onwards, which the settings were not tuned on (one design choice was made after looking at them; see the caveats in the doc) (`bench/predict-report.sh`, [docs/PREDICTIONS.md](docs/PREDICTIONS.md)):
+
+| | Model (simulation blended with each grid slot's record) | Grid order alone |
+|---|---|---|
+| Top pick won | 56% | 69% |
+| Podium finishers among the top three picks | 2.09 of 3 | 2.04 of 3 |
+| Mean finishing-position error | 2.59 places | 2.90 places |
+| Brier score, points finish (lower is better) | 0.156 | 0.165 |
+| Brier score, win (lower is better) | 0.030 | 0.025 |
+| Finishers inside their 10th-90th percentile range | 81% (80% is ideal) | n/a |
+
+So it is useful for the shape of the whole result and not for calling the winner, where the pole sitter is the better bet.
 
 ## How it works
 
@@ -108,6 +126,7 @@ cmd/spike       milestone-0 data probe                internal/lru       sharded
 web/            Vite + TypeScript + uPlot             internal/wal       write-ahead log
 bench/          load test + report scripts            internal/live      memtable, replay, seal
 docs/           PRD, DATA, FORMAT, API, DEPLOY        internal/api       HTTP handlers, metrics
+cmd/predict     race records, backtest, build         internal/predict   race model, Monte Carlo simulator
 ```
 
 ## Known limits

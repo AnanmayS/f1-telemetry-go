@@ -128,3 +128,106 @@ func (c *Client) CarData(ctx context.Context, session, driver int, w Window) ([]
 func (c *Client) Location(ctx context.Context, session, driver int, w Window) ([]Location, int, error) {
 	return fetchWindowed[Location](ctx, c, fmt.Sprintf("%d/location_%d.json.gz", session, driver), fmt.Sprintf("location?session_key=%d&driver_number=%d", session, driver), w)
 }
+
+// Race metadata, used by the prediction model. One request per session each.
+
+type Stint struct {
+	DriverNumber int    `json:"driver_number"`
+	StintNumber  int    `json:"stint_number"`
+	LapStart     *int   `json:"lap_start"`
+	LapEnd       *int   `json:"lap_end"`
+	Compound     string `json:"compound"`
+	TyreAge      *int   `json:"tyre_age_at_start"`
+}
+
+type RaceControl struct {
+	Date      *time.Time `json:"date"`
+	LapNumber *int       `json:"lap_number"`
+	Category  string     `json:"category"`
+	Flag      *string    `json:"flag"`
+	Message   string     `json:"message"`
+}
+
+// Result is one row of session_result. In a race Duration is a number; in
+// qualifying it is an array with one entry per segment, hence RawMessage.
+type Result struct {
+	DriverNumber int             `json:"driver_number"`
+	Position     Pos             `json:"position"`
+	Laps         *int            `json:"number_of_laps"`
+	Points       *float64        `json:"points"`
+	DNF          bool            `json:"dnf"`
+	DNS          bool            `json:"dns"`
+	DSQ          bool            `json:"dsq"`
+	Duration     json.RawMessage `json:"duration"`
+}
+
+// Segments returns the time of each qualifying segment in seconds (0 where
+// the driver set none), or nil for a race result.
+func (r Result) Segments() []float64 {
+	var many []*float64
+	if json.Unmarshal(r.Duration, &many) != nil {
+		return nil
+	}
+	out := make([]float64, len(many))
+	for i, v := range many {
+		if v != nil && *v > 0 {
+			out[i] = *v
+		}
+	}
+	return out
+}
+
+// Pos is a classified position. The feed sends a number, null, or a string
+// such as "NC" or "DQ" for a driver without one; anything but a number is 0.
+type Pos int
+
+func (p *Pos) UnmarshalJSON(b []byte) error {
+	var n int
+	if json.Unmarshal(b, &n) == nil {
+		*p = Pos(n)
+	} else {
+		*p = 0
+	}
+	return nil
+}
+
+// BestSeconds is the race duration, or the best qualifying segment time.
+// It returns 0 when there is none.
+func (r Result) BestSeconds() float64 {
+	var one float64
+	if json.Unmarshal(r.Duration, &one) == nil {
+		return one
+	}
+	var many []*float64
+	best := 0.0
+	if json.Unmarshal(r.Duration, &many) == nil {
+		for _, v := range many {
+			if v != nil && *v > 0 && (best == 0 || *v < best) {
+				best = *v
+			}
+		}
+	}
+	return best
+}
+
+type Position struct {
+	Date         *time.Time `json:"date"`
+	DriverNumber int        `json:"driver_number"`
+	Position     int        `json:"position"`
+}
+
+func (c *Client) Stints(ctx context.Context, session int) ([]Stint, int, error) {
+	return fetch[Stint](ctx, c, fmt.Sprintf("%d/stints_all.json.gz", session), fmt.Sprintf("stints?session_key=%d", session), 0)
+}
+
+func (c *Client) RaceControl(ctx context.Context, session int) ([]RaceControl, int, error) {
+	return fetch[RaceControl](ctx, c, fmt.Sprintf("%d/race_control_all.json.gz", session), fmt.Sprintf("race_control?session_key=%d", session), 0)
+}
+
+func (c *Client) Results(ctx context.Context, session int) ([]Result, int, error) {
+	return fetch[Result](ctx, c, fmt.Sprintf("%d/session_result_all.json.gz", session), fmt.Sprintf("session_result?session_key=%d", session), 0)
+}
+
+func (c *Client) Positions(ctx context.Context, session int) ([]Position, int, error) {
+	return fetch[Position](ctx, c, fmt.Sprintf("%d/position_all.json.gz", session), fmt.Sprintf("position?session_key=%d", session), 0)
+}

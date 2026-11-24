@@ -72,3 +72,18 @@ Historical queries are refused for unauthenticated clients while a session is li
 1. Rate limits and terms: above.
 2. Free pre-2023 telemetry: none.
 3. Free live feed for 2027: none; OpenF1 live is paid.
+
+## Race metadata for predictions (checked 2026-11-24)
+
+Used by `predict fetch`; one request per session each, all on the free tier.
+
+| Endpoint | What it gives | Notes |
+|---|---|---|
+| `stints?session_key=` | `lap_start`, `lap_end`, `compound`, `tyre_age_at_start` per driver | Compounds seen: SOFT, MEDIUM, HARD, INTERMEDIATE, WET. Present for 2023-2026. |
+| `race_control?session_key=` | Messages with `category`, `flag`, `lap_number` | Safety cars are `category: "SafetyCar"` with messages "SAFETY CAR DEPLOYED", "SAFETY CAR IN THIS LAP", "VIRTUAL SAFETY CAR DEPLOYED", "VIRTUAL SAFETY CAR ENDING". Red flags are `flag: "RED"`. Filtering by `category` in the query returned 404, so filter client-side. |
+| `session_result?session_key=` | `position`, `number_of_laps`, `points`, `dnf`, `dns`, `dsq`, `duration` | In a race `duration` is a number. In qualifying it is an array, one entry per segment (null when the driver did not run). `position` is usually a number but can be null or a string such as `"RT"`. |
+| `position?session_key=` | Position changes with timestamps | A driver's earliest record is their place on the grid as it formed up, so it already includes penalties. About 450 rows per race. |
+| `starting_grid?session_key=` | Grid with qualifying lap | Keyed by the **qualifying** session, not the race (the race key returns 404). Not used: the `position` endpoint reflects the real grid. |
+| `pit?session_key=` | `lane_duration`, `stop_duration` | `stop_duration` is null before 2026. Not used: pit loss is measured from lap start times, which also captures the slow in-lap and out-lap. |
+
+91 Grands Prix from 2023 to the 2026 Las Vegas Grand Prix had usable data; 8 were wet. Sprints are not fetched.
